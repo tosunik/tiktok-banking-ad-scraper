@@ -1,1 +1,78 @@
- 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+tiktok-scraper-env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+logs/
+*.log
+
+# Data files
+data/raw/*.json
+data/processed/
+data/media/
+debug_*.html
+debug_page_source.html
+detailed_page_analysis.html
+
+# Debug/Test files
+debug_*.py
+test_*.py
+*_debug.py
+quick_*.py
+examine_*.py
+analyze_*.py
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Railway
+.railway/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Reports (optional - keep if you want)
+# *.md (except README.md)

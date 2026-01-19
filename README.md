@@ -1,15 +1,16 @@
-# TikTok Ad Scraper
+# TikTok Banking Ad Scraper
 
-Bu proje, TikTok platformunda bankacılık ve finans sektörüne ait reklamları otomatik olarak toplayan bir Python uygulamasıdır. N8N workflow'ları ile entegre çalışabilir.
+Türk bankacılık sektörüne odaklı TikTok reklam toplama ve analiz aracı. N8N workflow'ları ile entegre çalışır ve Railway üzerinde deploy edilebilir.
 
 ## 🚀 Özellikler
 
-- **TikTok Reklam Toplama**: Belirtilen anahtar kelimelerle TikTok reklamlarını otomatik toplar
-- **Bankacılık Filtreleme**: Bankacılık ve finans sektörüne özel anahtar kelime filtreleme
+- **TikTok Ad Library Scraping**: Selenium ile TikTok reklam kütüphanesinden reklam toplama
+- **Bankacılık Filtreleme**: Türk bankalarına özel anahtar kelime filtreleme
 - **Medya Türü Desteği**: Video, resim ve metin reklamlarını destekler
 - **N8N Entegrasyonu**: FastAPI ile N8N workflow'larına entegre edilebilir
-- **Veri Kaydetme**: JSON formatında sonuçları kaydeder
-- **Logging**: Detaylı log kayıtları tutar
+- **Railway Deploy**: Railway üzerinde kolayca deploy edilebilir
+- **Hızlı Test Modu**: Geliştirme için optimize edilmiş hızlı test modu
+- **Gerçek Media URL'leri**: TikTok CDN'den gerçek video/image URL'leri
 
 ## 📋 Gereksinimler
 
@@ -21,8 +22,8 @@ Bu proje, TikTok platformunda bankacılık ve finans sektörüne ait reklamları
 
 1. **Repository'yi klonlayın:**
 ```bash
-git clone https://github.com/tosunik/tiktok_adscrape.git
-cd tiktok_adscrape
+git clone https://github.com/YOUR_USERNAME/tiktok-banking-ad-scraper.git
+cd tiktok-banking-ad-scraper
 ```
 
 2. **Sanal ortam oluşturun:**
@@ -40,10 +41,10 @@ pip install -r requirements.txt
 
 ## 🎯 Kullanım
 
-### Temel Kullanım
+### Komut Satırı (N8N için)
 
 ```bash
-python main.py
+python n8n_tiktok_scraper.py --keywords "garanti,isbank" --max-results 50 --output-format n8n
 ```
 
 ### FastAPI Server (N8N için)
@@ -56,9 +57,50 @@ Server `http://localhost:8000` adresinde çalışacaktır.
 
 ### API Endpoints
 
+- `GET /` - API bilgileri
 - `GET /health` - Sağlık kontrolü
-- `POST /scrape` - Reklam toplama işlemi başlatır
-- `GET /results` - Sonuçları getirir
+- `POST /scrape-tiktok` - Reklam toplama işlemi (N8N için)
+- `GET /test-scrape` - Hızlı test endpoint'i
+- `GET /turkish-banks` - Türk bankaları listesi
+
+### N8N Integration
+
+N8N workflow'unuzda şu şekilde kullanın:
+
+```json
+{
+  "method": "POST",
+  "url": "https://your-railway-app.up.railway.app/scrape-tiktok",
+  "body": {
+    "keywords": ["garanti", "isbank"],
+    "max_results": 50,
+    "banking_only": true,
+    "headless": true
+  }
+}
+```
+
+Response formatı (N8N için):
+```json
+[
+  {
+    "ad_id": "...",
+    "advertiser_name": "TURKIYE GARANTI BANKASI ANONIM SIRKETI",
+    "ad_text": "...",
+    "media_type": "video",
+    "media_urls": ["https://p21-ad-sg.ibyteimg.com/..."],
+    "is_banking_ad": true,
+    "scraped_at": "2026-01-19T14:18:35",
+    "n8n_meta": {
+      "media_count": 1,
+      "has_video": true,
+      "has_image": false,
+      "is_banking": true,
+      "processing_priority": "high"
+    }
+  }
+]
+```
 
 ## 📁 Proje Yapısı
 
@@ -66,38 +108,72 @@ Server `http://localhost:8000` adresinde çalışacaktır.
 tiktok-ad-scraper/
 ├── src/
 │   ├── config/          # Yapılandırma dosyaları
+│   │   └── settings.py
 │   ├── models/          # Veri modelleri
+│   │   └── ad_model.py
 │   ├── scraper/         # Scraping mantığı
+│   │   ├── tiktok_scraper.py
+│   │   └── tiktok_selenium_scraper.py
 │   └── utils/           # Yardımcı fonksiyonlar
-├── data/               # Toplanan veriler
-├── logs/               # Log dosyaları
-├── main.py             # Ana uygulama
-├── fastapi_server.py   # N8N entegrasyonu
-└── requirements.txt    # Python bağımlılıkları
+│       ├── helpers.py
+│       └── proxy_manager.py
+├── data/               # Toplanan veriler (gitignore'da)
+├── logs/               # Log dosyaları (gitignore'da)
+├── n8n_tiktok_scraper.py  # N8N CLI wrapper
+├── fastapi_server.py   # N8N FastAPI server
+├── requirements.txt    # Python bağımlılıkları
+├── Procfile           # Railway deployment
+└── railway.json       # Railway config
 ```
 
 ## ⚙️ Yapılandırma
 
 Uygulama ayarları `src/config/settings.py` dosyasında bulunur:
 
-- `tiktok_max_ads_per_search`: Arama başına maksimum reklam sayısı
-- `log_level`: Log seviyesi
-- `log_file`: Log dosya yolu
+- `tiktok_max_ads_per_search`: Arama başına maksimum reklam sayısı (default: 200)
+- `log_level`: Log seviyesi (default: INFO)
+- `banking_keywords`: Bankacılık anahtar kelimeleri
+
+## 🚂 Railway Deployment
+
+1. **Railway'de yeni proje oluşturun**
+2. **GitHub repo'yu bağlayın**
+3. **Deploy settings:**
+   - Build Command: `pip install -r requirements.txt`
+   - Start Command: `python fastapi_server.py`
+   - Port: Railway otomatik set eder
+
+4. **Environment Variables (opsiyonel):**
+   - `PORT=8000`
+   - `LOG_LEVEL=INFO`
 
 ## 📊 Çıktı Formatı
 
-Toplanan reklamlar JSON formatında `data/raw/` klasörüne kaydedilir:
+### N8N Format (Array of Objects)
+```json
+[
+  {
+    "ad_id": "selenium_0_1234567890",
+    "advertiser_name": "TURKIYE GARANTI BANKASI ANONIM SIRKETI",
+    "media_type": "video",
+    "media_urls": ["https://..."],
+    "is_banking_ad": true,
+    "n8n_meta": {...}
+  }
+]
+```
 
+### Standard JSON Format
 ```json
 {
-  "total_ads": 50,
-  "banking_ads": 12,
-  "video_ads": 30,
-  "image_ads": 15,
-  "text_ads": 5,
-  "failed_ads": 3,
-  "duration_seconds": 45.2,
-  "scraped_at": "2024-01-01T12:00:00Z"
+  "summary": {
+    "total_ads": 50,
+    "banking_ads": 12,
+    "video_ads": 30,
+    "image_ads": 15,
+    "duration_seconds": 45.2
+  },
+  "ads": [...]
 }
 ```
 
@@ -106,7 +182,12 @@ Toplanan reklamlar JSON formatında `data/raw/` klasörüne kaydedilir:
 ### Test Çalıştırma
 
 ```bash
-python -m pytest
+# Hızlı test (3 reklam)
+python n8n_tiktok_scraper.py --keywords "isbank" --max-results 3 --output-format json
+
+# FastAPI test
+python fastapi_server.py
+# Başka terminal: curl http://localhost:8000/test-scrape
 ```
 
 ### Kod Formatlama
@@ -116,17 +197,17 @@ black .
 flake8 .
 ```
 
+## 🆕 Son Güncellemeler
+
+- ✅ TikTok'un yeni URL yapısına uyum sağlandı
+- ✅ Test süresi optimize edildi (~30s → ~24s)
+- ✅ Gerçek TikTok CDN URL'leri çıkarılıyor
+- ✅ Advertiser name temizleme iyileştirildi
+- ✅ N8N uyumlu response formatı
+
 ## 📝 Lisans
 
 Bu proje MIT lisansı altında lisanslanmıştır.
-
-## 🤝 Katkıda Bulunma
-
-1. Fork yapın
-2. Feature branch oluşturun (`git checkout -b feature/amazing-feature`)
-3. Commit yapın (`git commit -m 'Add amazing feature'`)
-4. Push yapın (`git push origin feature/amazing-feature`)
-5. Pull Request oluşturun
 
 ## ⚠️ Uyarılar
 

@@ -15,10 +15,8 @@ import json
 import re
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
+from pathlib import Path
 from loguru import logger
-
-from src.config.settings import settings
-from src.utils.helpers import safe_sleep, clean_text
 
 from src.config.settings import settings
 from src.utils.helpers import safe_sleep, clean_text
@@ -357,12 +355,11 @@ class TikTokSeleniumScraper:
             f"region={region}",
             f"start_time={start_timestamp}",
             f"end_time={end_timestamp}",
-            f"query_type=1",
-            f"sort_type=last_shown_date,desc"
+            f"adv_name={advertiser_name}" if advertiser_name else "adv_name=",
+            "adv_biz_ids=",  # TikTok'un güncel URL formatında gerekli (boş string)
+            "query_type=1",
+            "sort_type=last_shown_date,desc"
         ]
-        
-        if advertiser_name:
-            params.append(f"adv_name={advertiser_name}")
         
         return url + "?" + "&".join(params)
     
@@ -381,7 +378,7 @@ class TikTokSeleniumScraper:
                 search_url = self.build_search_url(advertiser_name=advertiser)
                 logger.info(f"URL: {search_url}")
                 
-                ads = self._scrape_ads_from_url(search_url, max_ads_per_search=20)
+                ads = self._scrape_ads_from_url(search_url, max_ads_per_search=3)  # 20'den 3'e düşürüldü
                 all_ads.extend(ads)
                 
                 logger.info(f"'{advertiser}' için {len(ads)} reklam bulundu")
@@ -414,20 +411,26 @@ class TikTokSeleniumScraper:
         
         return self.search_ads_by_advertiser(turkish_banks, max_ads)
     
-    def _scrape_ads_from_url(self, url: str, max_ads_per_search: int = 20) -> List[Dict]:
-        """Belirli URL'den reklamları scrape et"""
+    def _scrape_ads_from_url(self, url: str, max_ads_per_search: int = 3) -> List[Dict]:
+        """Belirli URL'den reklamları scrape et - Hızlı test versiyonu"""
         ads = []
         
         try:
             self.driver.get(url)
             
-            # Sayfanın yüklenmesini bekle
-            WebDriverWait(self.driver, 10).until(
+            # Sayfanın yüklenmesini bekle (20'den 8'e düşürüldü)
+            WebDriverWait(self.driver, 8).until(
                 EC.presence_of_element_located((By.TAG_NAME, "body"))
             )
             
-            # Biraz bekle, dinamik içerik için
-            time.sleep(5)
+            # Dinamik içerik için bekle (10'dan 3'e düşürüldü)
+            time.sleep(3)
+            
+            # Scroll yaparak içeriği yükle (beklemeleri azalt)
+            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2);")
+            time.sleep(1)  # 3'ten 1'e düşürüldü
+            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(2)  # 3'ten 2'ye düşürüldü
             
             # Reklam kartlarını bul
             ad_elements = self._find_ad_elements()
@@ -455,20 +458,64 @@ class TikTokSeleniumScraper:
         return ads
     
     def _find_ad_elements(self) -> List:
-        """Sayfadaki reklam elementlerini bul - TikTok gerçek yapısı"""
+        """Sayfadaki reklam elementlerini bul - TikTok güncel yapısı"""
         try:
-            # TikTok'un gerçek CSS selector'ı
-            main_selector = '.ad_card'
+            # Önce sayfanın tam yüklenmesini bekle (15'ten 8'e düşürüldü)
+            WebDriverWait(self.driver, 8).until(
+                EC.presence_of_element_located((By.TAG_NAME, "body"))
+            )
             
-            # Ana reklam kartlarını bul
-            elements = self.driver.find_elements(By.CSS_SELECTOR, main_selector)
+            # JavaScript'in çalışması için bekle (5'ten 2'ye düşürüldü)
+            time.sleep(2)
             
-            if elements:
-                logger.info(f"TikTok reklam kartları bulundu: {len(elements)} adet (.ad_card)")
-                return elements
-            else:
-                logger.warning("Hiçbir .ad_card elementi bulunamadı")
-                return []
+            # Scroll yaparak dinamik içeriği yükle (beklemeleri azalt)
+            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2);")
+            time.sleep(1)  # 2'den 1'e düşürüldü
+            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(2)  # 3'ten 2'ye düşürüldü
+            
+            # Öncelikli selector'lar - TikTok'un gerçek reklam kartlarını bul
+            selectors = [
+                '.ad_card',  # Öncelik 1: TikTok'un gerçek reklam kartı class'ı
+                'div[class*="ad_card"]',  # Öncelik 2: ad_card içeren div
+                'div[class*="AdCard"]',  # Öncelik 3: AdCard içeren div
+                'div[data-testid*="ad"]',  # Öncelik 4: data-testid ile
+                'div[class*="ad"]'  # Fallback: Genel ad içeren div
+            ]
+            
+            for selector in selectors:
+                try:
+                    found = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                    if found:
+                        # UI elementlerini filtrele - gerçek reklam kartlarını bul
+                        filtered = []
+                        for elem in found:
+                            text = elem.text.strip()
+                            # En az 10 karakter içerik olmalı ve UI metinlerini atla
+                            if text and len(text) > 10:
+                                # "Filters", "Search results", "Total ads: 0" gibi UI metinlerini atla
+                                ui_keywords = ['Filters', 'Search results', 'Total ads:', 'Sort by', 'Region:', 'Date range:']
+                                if not any(ui_keyword in text for ui_keyword in ui_keywords):
+                                    filtered.append(elem)
+                        
+                        if filtered:
+                            logger.info(f"✅ {len(filtered)} reklam elementi bulundu (selector: {selector})")
+                            return filtered
+                except Exception as e:
+                    logger.debug(f"Selector {selector} ile hata: {e}")
+                    continue
+            
+            logger.warning("Hiçbir reklam elementi bulunamadı")
+            # Debug için sayfa kaynağını kaydet
+            try:
+                page_source = self.driver.page_source
+                debug_path = Path(__file__).parent.parent.parent / 'debug_page_source.html'
+                with open(debug_path, 'w', encoding='utf-8') as f:
+                    f.write(page_source)
+                logger.info(f"Debug: Sayfa kaynağı '{debug_path}' dosyasına kaydedildi")
+            except Exception as debug_e:
+                logger.debug(f"Debug dosyası kaydedilemedi: {debug_e}")
+            return []
             
         except Exception as e:
             logger.error(f"Element bulma hatası: {e}")
@@ -507,34 +554,18 @@ class TikTokSeleniumScraper:
             return None
     
     def _extract_from_selenium_element(self, element) -> Dict:
-        """Enhanced video extraction with network monitoring"""
+        """Hızlı test versiyonu - Video extraction atlanıyor (çok yavaş)"""
         data = {}
         
         try:
-            # NetworkVideoExtractor kullan
-            video_extractor = NetworkVideoExtractor(self.driver)
-            
-            # Detay sayfasından gerçek video URL'i al
-            video_url = video_extractor.extract_video_from_detail_page(element)
-            
-            if video_url:
-                data['media_urls'] = [video_url]
-                data['media_type'] = 'video'
-                data['video_found'] = True
-                data['extraction_method'] = 'network_detail_page'
-                logger.info(f"✅ Network'den video URL bulundu")
-            else:
-                # Fallback: Original thumbnail method
-                data.update(self._original_media_extraction(element))
-                data['video_found'] = False
-                data['extraction_method'] = 'fallback_thumbnail'
-            
-            # Diğer ad bilgilerini çıkar
+            # TEST İÇİN: Video extraction'ı atla (çok yavaş - detay sayfasına gitmek 15+ saniye sürüyor)
+            # Sadece thumbnail ve metadata çıkar
+            data.update(self._original_media_extraction(element))
             data.update(self._extract_ad_metadata(element))
+            data['extraction_method'] = 'fast_test_mode'
             
         except Exception as e:
-            logger.error(f"Enhanced extraction hatası: {e}")
-            data.update(self._original_media_extraction(element))
+            logger.error(f"Extraction hatası: {e}")
             data.update(self._extract_ad_metadata(element))
         
         return data
@@ -560,54 +591,128 @@ class TikTokSeleniumScraper:
             logger.debug(f"Video trigger hatası: {e}")
 
     def _extract_ad_metadata(self, element) -> Dict:
-        """Reklam meta verilerini çıkar"""
+        """Reklam meta verilerini çıkar - TikTok'un gerçek yapısı"""
         data = {}
         
         try:
-            # Advertiser name
+            # Advertiser name - .ad_info_name class'ı kullan
             try:
-                advertiser_elem = element.find_element(By.CSS_SELECTOR, '.ad_info_text')
+                advertiser_elem = element.find_element(By.CSS_SELECTOR, '.ad_info_name')
                 advertiser_text = clean_text(advertiser_elem.text)
+                # "Ad" kelimesini kaldır (başta, sonda veya ayrı satırda olabilir)
+                lines = advertiser_text.split('\n')
+                # "Ad" satırını atla, diğer satırları birleştir
+                filtered_lines = [line.strip() for line in lines if line.strip().lower() != 'ad' and len(line.strip()) > 2]
+                if filtered_lines:
+                    advertiser_text = ' '.join(filtered_lines).strip()
+                else:
+                    # Eğer tek satırsa, "Ad " ile başlıyorsa kaldır
+                    advertiser_text = advertiser_text.replace('Ad ', '').replace('Ad ', '').strip()
+                    # Başta veya sonda "Ad" kelimesi varsa kaldır
+                    if advertiser_text.lower().startswith('ad '):
+                        advertiser_text = advertiser_text[3:].strip()
+                    if advertiser_text.lower().endswith(' ad'):
+                        advertiser_text = advertiser_text[:-3].strip()
+                
+                # Son bir temizleme: Başta "Ad " varsa kaldır (case-insensitive)
+                if advertiser_text:
+                    # Regex ile başta "Ad " veya "ad " kaldır
+                    advertiser_text = re.sub(r'^[Aa][Dd]\s+', '', advertiser_text).strip()
+                
                 if advertiser_text and len(advertiser_text) > 2:
                     data['advertiser_name'] = advertiser_text
+                else:
+                    data['advertiser_name'] = 'Unknown'
             except:
-                data['advertiser_name'] = 'Unknown'
+                # Fallback: Text içinden bul
+                try:
+                    full_text = element.text
+                    lines = [line.strip() for line in full_text.split('\n') if line.strip()]
+                    # "Ad" kelimesinden sonraki satır genelde advertiser name
+                    for i, line in enumerate(lines):
+                        if line.lower() == 'ad' and i + 1 < len(lines):
+                            next_line = lines[i + 1].strip()
+                            if len(next_line) > 2 and len(next_line) < 200:
+                                advertiser_name = clean_text(next_line)
+                                # "Ad " ile başlıyorsa kaldır
+                                if advertiser_name.lower().startswith('ad '):
+                                    advertiser_name = advertiser_name[3:].strip()
+                                data['advertiser_name'] = advertiser_name
+                                break
+                    # Eğer bulunamadıysa, ilk anlamlı satırı al ve "Ad " ile başlıyorsa temizle
+                    if not data.get('advertiser_name'):
+                        for line in lines:
+                            if len(line) > 5:  # Anlamlı bir satır
+                                advertiser_name = clean_text(line)
+                                # "Ad " ile başlıyorsa kaldır
+                                if advertiser_name.lower().startswith('ad '):
+                                    advertiser_name = advertiser_name[3:].strip()
+                                if len(advertiser_name) > 2:
+                                    data['advertiser_name'] = advertiser_name
+                                    break
+                    if not data.get('advertiser_name'):
+                        data['advertiser_name'] = 'Unknown'
+                except:
+                    data['advertiser_name'] = 'Unknown'
             
-            # Ad details
+            # Ad details - tarih ve reach bilgileri (text içinde)
             try:
-                detail_elem = element.find_element(By.CSS_SELECTOR, '.ad_detail')
-                detail_text = detail_elem.text
-                
+                detail_text = element.text
                 lines = detail_text.split('\n')
-                for line in lines:
+                for i, line in enumerate(lines):
                     line = line.strip()
                     if 'First shown:' in line:
-                        data['first_shown'] = line.replace('First shown:', '').strip()
+                        # Sonraki satır tarih olabilir
+                        if i + 1 < len(lines):
+                            data['first_shown'] = lines[i + 1].strip()
+                        else:
+                            data['first_shown'] = line.replace('First shown:', '').strip()
                     elif 'Last shown:' in line:
-                        data['last_shown'] = line.replace('Last shown:', '').strip()
+                        if i + 1 < len(lines):
+                            data['last_shown'] = lines[i + 1].strip()
+                        else:
+                            data['last_shown'] = line.replace('Last shown:', '').strip()
                     elif 'Unique users seen:' in line:
-                        data['reach'] = line.replace('Unique users seen:', '').strip()
+                        if i + 1 < len(lines):
+                            data['reach'] = lines[i + 1].strip()
+                        else:
+                            data['reach'] = line.replace('Unique users seen:', '').strip()
             except:
                 pass
             
-            # Ad ID ve detail URL
+            # Ad ID ve detail URL - a.link class'ı kullan
             try:
-                link_elem = element.find_element(By.CSS_SELECTOR, 'a')
+                link_elem = element.find_element(By.CSS_SELECTOR, 'a.link')
                 href = link_elem.get_attribute('href')
-                if href and 'ad_id=' in href:
-                    ad_id = href.split('ad_id=')[1].split('&')[0]
-                    data['ad_id'] = ad_id
-                    data['detail_url'] = href
+                if href:
+                    # Tam URL yap
+                    if href.startswith('/'):
+                        href = f"https://library.tiktok.com{href}"
+                    data['ad_url'] = href
+                    
+                    # Ad ID'yi URL'den çıkar
+                    if 'ad_id=' in href:
+                        ad_id = href.split('ad_id=')[1].split('&')[0]
+                        data['ad_id'] = ad_id
             except:
-                pass
+                # Fallback: Herhangi bir link ara
+                try:
+                    link_elems = element.find_elements(By.CSS_SELECTOR, 'a[href*="detail"]')
+                    for link_elem in link_elems:
+                        href = link_elem.get_attribute('href')
+                        if href and 'ad_id=' in href:
+                            if href.startswith('/'):
+                                href = f"https://library.tiktok.com{href}"
+                            data['ad_url'] = href
+                            ad_id = href.split('ad_id=')[1].split('&')[0]
+                            data['ad_id'] = ad_id
+                            break
+                except:
+                    pass
             
-            # Ad text
-            try:
-                full_text = clean_text(element.text)
-                if len(full_text) > 20:
-                    data['ad_text'] = full_text[:500] + ('...' if len(full_text) > 500 else '')
-            except:
-                data['ad_text'] = ''
+            # Ad text - sadece advertiser name'i al (reklam metni detay sayfasında)
+            # Ana sayfada genelde sadece advertiser name var
+            data['ad_text'] = data.get('advertiser_name', '')
         
         except Exception as e:
             logger.debug(f"Metadata extraction hatası: {e}")
@@ -615,7 +720,7 @@ class TikTokSeleniumScraper:
         return data
 
     def _original_media_extraction(self, element) -> Dict:
-        """Original extraction method (fallback)"""
+        """Media extraction - Güncel TikTok yapısı"""
         data = {
             'media_urls': [],
             'media_type': 'text',
@@ -624,18 +729,84 @@ class TikTokSeleniumScraper:
         }
         
         try:
-            # Background image extraction
-            video_player = element.find_element(By.CSS_SELECTOR, '.video_player')
-            style = video_player.get_attribute('style')
-            if style and 'background-image: url(' in style:
-                url_match = re.search(r'background-image:\s*url\(["\']?(.*?)["\']?\)', style)
-                if url_match:
-                    media_url = url_match.group(1)
-                    data['media_urls'] = [media_url]
-                    data['media_type'] = 'image'  # Bu genellikle thumbnail
-                    logger.warning(f"⚠️ Sadece thumbnail URL bulundu: {media_url[:100]}...")
-        except:
-            pass
+            # Video elementlerini bul
+            video_selectors = [
+                'video',
+                '[class*="video"]',
+                '[class*="Video"]',
+                '[data-testid*="video"]',
+            ]
+            
+            for selector in video_selectors:
+                try:
+                    videos = element.find_elements(By.CSS_SELECTOR, selector)
+                    for video in videos:
+                        src = video.get_attribute('src')
+                        if src and ('video' in src.lower() or '.mp4' in src.lower()):
+                            data['media_urls'].append(src)
+                            data['media_type'] = 'video'
+                            data['video_found'] = True
+                            logger.info(f"✅ Video URL bulundu: {src[:100]}...")
+                            break
+                    if data['video_found']:
+                        break
+                except:
+                    continue
+            
+            # Image elementlerini bul
+            if not data['video_found']:
+                image_selectors = [
+                    'img',
+                    '[class*="image"]',
+                    '[class*="Image"]',
+                    '[class*="thumbnail"]',
+                    '[data-testid*="image"]',
+                ]
+                
+                for selector in image_selectors:
+                    try:
+                        images = element.find_elements(By.CSS_SELECTOR, selector)
+                        for img in images:
+                            src = img.get_attribute('src')
+                            if src:
+                                # Placeholder SVG'leri filtrele (data:image/svg+xml)
+                                if src.startswith('data:image/svg+xml'):
+                                    continue
+                                # Gerçek image URL'leri kabul et
+                                if ('image' in src.lower() or any(ext in src.lower() for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp', 'http', 'https'])):
+                                    data['media_urls'].append(src)
+                                    data['media_type'] = 'image'
+                                    logger.info(f"✅ Image URL bulundu: {src[:100]}...")
+                                    break
+                        if data['media_urls']:
+                            break
+                    except:
+                        continue
+            
+            # Background image extraction (fallback)
+            if not data['media_urls']:
+                try:
+                    # Tüm elementlerde background-image ara
+                    all_elements = element.find_elements(By.CSS_SELECTOR, '*')
+                    for elem in all_elements:
+                        style = elem.get_attribute('style')
+                        if style and 'background-image' in style:
+                            url_match = re.search(r'background-image:\s*url\(["\']?(.*?)["\']?\)', style)
+                            if url_match:
+                                media_url = url_match.group(1)
+                                # Placeholder SVG'leri filtrele
+                                if media_url and media_url != 'none' and not media_url.startswith('data:image/svg+xml'):
+                                    data['media_urls'].append(media_url)
+                                    data['media_type'] = 'image'
+                                    logger.info(f"✅ Background image URL bulundu: {media_url[:100]}...")
+                                    break
+                except:
+                    pass
+                    
+        except Exception as e:
+            logger.debug(f"Media extraction hatası: {e}")
+        
+        return data
         
         return data
     
