@@ -28,9 +28,16 @@ try:
     from src.scraper.tiktok_scraper import TikTokAdScraper
     from src.config.settings import settings
     logger.info("Successfully imported project modules")
+    print("✅ Successfully imported project modules")
 except ImportError as e:
-    logger.error(f"Import error: {e}")
+    error_msg = f"Import error: {e}"
+    logger.error(error_msg)
     logger.error("Make sure you're running from the project root directory")
+    print(f"❌ {error_msg}")
+    print(f"Current directory: {Path.cwd()}")
+    print(f"Python path: {sys.path}")
+    import traceback
+    traceback.print_exc()
     sys.exit(1)
 
 app = FastAPI(
@@ -107,10 +114,15 @@ async def health_check():
             "banking_keywords_count": len(settings.banking_keywords)
         }
     except Exception as e:
-        return {
+        import traceback
+        error_detail = {
             "status": "unhealthy",
-            "error": str(e)
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "traceback": traceback.format_exc()
         }
+        logger.error(f"Health check failed: {error_detail}")
+        return error_detail
 
 @app.post("/scrape-tiktok")
 async def scrape_tiktok_ads(request: ScrapeRequest):
@@ -234,9 +246,17 @@ if __name__ == "__main__":
     logs_dir.mkdir(exist_ok=True)
     logger.add("logs/fastapi.log", rotation="1 day", retention="30 days")
     
+    # Print startup info to stdout (Railway logs)
+    print("=" * 50)
+    print("Starting TikTok Banking Intelligence FastAPI server...")
+    print(f"Current directory: {Path.cwd()}")
+    print(f"Python path: {sys.path}")
+    print("=" * 50)
+    
     # Get port from environment (Railway sets PORT)
     port = int(os.getenv("PORT", 8000))
     logger.info(f"Starting TikTok Banking Intelligence FastAPI server on port {port}...")
+    print(f"Starting server on port {port}...")
     
     try:
         uvicorn.run(
@@ -248,4 +268,6 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"Failed to start server: {e}")
         logger.error(traceback.format_exc())
+        print(f"ERROR: Failed to start server: {e}")
+        print(traceback.format_exc())
         raise
