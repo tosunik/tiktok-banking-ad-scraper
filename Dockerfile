@@ -26,5 +26,6 @@ RUN mkdir -p logs
 
 EXPOSE 8000
 
-# Use Python script which handles PORT env variable correctly
-CMD ["python", "fastapi_server.py"]
+# Railway will use startCommand from railway.json
+# But we provide a fallback CMD that works
+CMD python fastapi_server.py
