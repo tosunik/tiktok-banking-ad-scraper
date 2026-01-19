@@ -17,10 +17,12 @@ import os
 from pathlib import Path
 import traceback
 
-# Add project paths
+# Add project paths - Railway compatible
 current_dir = Path(__file__).parent
+# Add current directory and src directory to path
 sys.path.insert(0, str(current_dir))
-sys.path.insert(0, str(current_dir / "src"))
+if (current_dir / "src").exists():
+    sys.path.insert(0, str(current_dir / "src"))
 
 try:
     from src.scraper.tiktok_scraper import TikTokAdScraper
@@ -227,15 +229,23 @@ async def test_scrape():
         }
 
 if __name__ == "__main__":
-    # Setup logging
+    # Setup logging - ensure logs directory exists
+    logs_dir = Path("logs")
+    logs_dir.mkdir(exist_ok=True)
     logger.add("logs/fastapi.log", rotation="1 day", retention="30 days")
-    logger.info("Starting TikTok Banking Intelligence FastAPI server...")
     
+    # Get port from environment (Railway sets PORT)
     port = int(os.getenv("PORT", 8000))
+    logger.info(f"Starting TikTok Banking Intelligence FastAPI server on port {port}...")
     
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=port,
-        log_level="info"
-    )
+    try:
+        uvicorn.run(
+            app,
+            host="0.0.0.0",
+            port=port,
+            log_level="info"
+        )
+    except Exception as e:
+        logger.error(f"Failed to start server: {e}")
+        logger.error(traceback.format_exc())
+        raise
