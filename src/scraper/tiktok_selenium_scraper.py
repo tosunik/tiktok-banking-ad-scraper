@@ -372,16 +372,31 @@ class TikTokSeleniumScraper:
             return []
         
         try:
+            # Eğer sadece bir advertiser aranıyorsa, tüm max_ads'i ondan al
+            # Birden fazla advertiser varsa, her birinden eşit dağıt
+            if len(advertiser_names) == 1:
+                # Tek advertiser için tüm max_ads'i kullan
+                max_ads_per_search = max_ads
+            else:
+                # Birden fazla advertiser için eşit dağıt (minimum 3, maksimum max_ads / advertiser sayısı)
+                max_ads_per_search = max(3, max_ads // len(advertiser_names))
+            
+            logger.info(f"Her advertiser için maksimum {max_ads_per_search} reklam aranacak")
+            
             for advertiser in advertiser_names:
                 logger.info(f"'{advertiser}' reklamları aranıyor...")
                 
                 search_url = self.build_search_url(advertiser_name=advertiser)
                 logger.info(f"URL: {search_url}")
                 
-                ads = self._scrape_ads_from_url(search_url, max_ads_per_search=3)  # 20'den 3'e düşürüldü
+                # Kalan reklam sayısını hesapla
+                remaining_ads = max_ads - len(all_ads)
+                current_max = min(max_ads_per_search, remaining_ads)
+                
+                ads = self._scrape_ads_from_url(search_url, max_ads_per_search=current_max)
                 all_ads.extend(ads)
                 
-                logger.info(f"'{advertiser}' için {len(ads)} reklam bulundu")
+                logger.info(f"'{advertiser}' için {len(ads)} reklam bulundu (Toplam: {len(all_ads)})")
                 
                 # Rate limiting
                 safe_sleep(3, 5)

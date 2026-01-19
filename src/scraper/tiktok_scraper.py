@@ -25,10 +25,15 @@ class TikTokAdScraper:
         result = ScrapingResult()
         
         try:
-            logger.info(f"Selenium ile TikTok scraping başlatılıyor...")
+            logger.info(f"Selenium ile TikTok scraping başlatılıyor... Keywords: {keywords}")
             
-            # Türk bankalarının reklamlarını ara
-            raw_ads_data = self.selenium_scraper.search_banking_ads(max_results)
+            # Keywords parametresini kullan - eğer keywords verilmişse onları kullan
+            if keywords and len(keywords) > 0:
+                # Kullanıcının verdiği keyword'leri advertiser name olarak ara
+                raw_ads_data = self.selenium_scraper.search_ads_by_advertiser(keywords, max_results)
+            else:
+                # Keywords yoksa tüm bankaları ara (fallback)
+                raw_ads_data = self.selenium_scraper.search_banking_ads(max_results)
             
             logger.info(f"Raw data alındı: {len(raw_ads_data)} reklam")
             
