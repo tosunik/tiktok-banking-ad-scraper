@@ -1,23 +1,3 @@
-print("=== STARTING DEBUG ===")
-try:
-    print("Basic imports...")
-    from fastapi import FastAPI
-    print("FastAPI imported successfully")
-    
-    print("Testing Selenium import...")
-    from selenium import webdriver
-    print("Selenium imported successfully")
-    
-    print("Testing Chrome...")
-    from selenium.webdriver.chrome.options import Options
-    print("Chrome options imported successfully")
-    
-except Exception as e:
-    print(f"IMPORT ERROR: {e}")
-    import traceback
-    traceback.print_exc()
-
-print("=== DEBUG COMPLETE ===")
 #!/usr/bin/env python3
 """
 FastAPI server for TikTok scraper - N8N integration
@@ -98,6 +78,7 @@ async def root():
         "status": "running",
         "endpoints": ["/health", "/scrape-tiktok", "/test-scrape", "/turkish-banks"]
     }
+
 @app.get("/test-selenium")
 async def test_selenium():
     try:
@@ -246,7 +227,9 @@ async def test_scrape():
         }
 
 if __name__ == "__main__":
-    # ... diğer kodlar ...
+    # Setup logging
+    logger.add("logs/fastapi.log", rotation="1 day", retention="30 days")
+    logger.info("Starting TikTok Banking Intelligence FastAPI server...")
     
     port = int(os.getenv("PORT", 8000))
     
@@ -254,16 +237,5 @@ if __name__ == "__main__":
         app,
         host="0.0.0.0",
         port=port,
-        log_level="info"
-    )
-    
-    # Setup logging
-    logger.add("logs/fastapi.log", rotation="1 day", retention="30 days")
-    logger.info("Starting TikTok Banking Intelligence FastAPI server...")
-    
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=8000,
         log_level="info"
     )
