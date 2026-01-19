@@ -63,6 +63,12 @@ class ScrapeRequest(BaseModel):
     banking_only: bool = Field(default=True)
     headless: bool = Field(default=True)
 
+class AdvertiserScrapeRequest(BaseModel):
+    """N8N için basit advertiser_name ile arama"""
+    advertiser_name: str = Field(..., description="Reklam veren firma adı (örn: TURKIYE GARANTI BANKASI)")
+    max_ads: int = Field(default=20, ge=1, le=100, description="Maksimum reklam sayısı")
+    headless: bool = Field(default=True, description="Headless mod")
+
 class N8NAdResponse(BaseModel):
     """N8N-friendly ad response format"""
     ad_id: str
@@ -85,7 +91,7 @@ async def root():
     return {
         "message": "TikTok Banking Ad Intelligence API", 
         "status": "running",
-        "endpoints": ["/health", "/scrape-tiktok", "/test-scrape", "/turkish-banks"]
+        "endpoints": ["/health", "/scrape", "/scrape-tiktok", "/test-scrape", "/turkish-banks"]
     }
 
 @app.get("/test-selenium")
@@ -123,6 +129,65 @@ async def health_check():
         }
         logger.error(f"Health check failed: {error_detail}")
         return error_detail
+
+@app.post("/scrape")
+async def scrape_by_advertiser(request: AdvertiserScrapeRequest):
+    """
+    N8N için basit endpoint - advertiser_name ile arama yapar
+    Örnek: {"advertiser_name": "TURKIYE GARANTI BANKASI", "max_ads": 20}
+    """
+    logger.info(f"N8N scraping request: advertiser_name={request.advertiser_name}, max_ads={request.max_ads}")
+    
+    try:
+        from src.scraper.tiktok_selenium_scraper import TikTokSeleniumScraper
+        from datetime import datetime
+        
+        # Selenium scraper'ı başlat
+        scraper = TikTokSeleniumScraper(headless=request.headless)
+        
+        # Advertiser name ile arama yap
+        ads = scraper.search_ads_by_advertiser(
+            advertiser_names=[request.advertiser_name],
+            max_ads=request.max_ads
+        )
+        
+        # N8N formatına çevir
+        n8n_ads = []
+        for ad in ads:
+            n8n_ad = {
+                "ad_id": ad.get("ad_id", ""),
+                "advertiser_name": ad.get("advertiser_name", request.advertiser_name),
+                "ad_text": ad.get("ad_text", ""),
+                "media_type": ad.get("media_type", "unknown"),
+                "media_urls": ad.get("media_urls", []),
+                "is_banking_ad": ad.get("is_banking_ad", False),
+                "banking_keywords_found": ad.get("banking_keywords_found", []),
+                "scraped_at": datetime.now().isoformat(),
+                "first_shown": ad.get("first_shown"),
+                "last_shown": ad.get("last_shown"),
+                "source_url": ad.get("ad_url", ""),
+                "reach": ad.get("reach"),
+            }
+            n8n_ads.append(n8n_ad)
+        
+        logger.info(f"N8N response ready: {len(n8n_ads)} ads for {request.advertiser_name}")
+        
+        # N8N için array döndür
+        return n8n_ads
+        
+    except Exception as e:
+        logger.error(f"Scraping failed: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": str(e),
+                "type": type(e).__name__,
+                "success": False,
+                "traceback": traceback.format_exc()
+            }
+        )
 
 @app.post("/scrape-tiktok")
 async def scrape_tiktok_ads(request: ScrapeRequest):
