@@ -475,19 +475,27 @@ class TikTokSeleniumScraper:
     def _find_ad_elements(self) -> List:
         """Sayfadaki reklam elementlerini bul - TikTok güncel yapısı"""
         try:
-            # Önce sayfanın tam yüklenmesini bekle (15'ten 8'e düşürüldü)
-            WebDriverWait(self.driver, 8).until(
+            # Önce sayfanın tam yüklenmesini bekle - UZUN BEKLE (TikTok yavaş yüklenebilir)
+            WebDriverWait(self.driver, 15).until(
                 EC.presence_of_element_located((By.TAG_NAME, "body"))
             )
             
-            # JavaScript'in çalışması için bekle (5'ten 2'ye düşürüldü)
-            time.sleep(2)
+            # JavaScript'in çalışması ve reklamların yüklenmesi için UZUN BEKLE
+            logger.info("Sayfa yüklendi, reklamların görünmesini bekliyorum...")
+            time.sleep(5)
             
-            # Scroll yaparak dinamik içeriği yükle (beklemeleri azalt)
+            # Scroll yaparak dinamik içeriği yükle - YAVAŞ SCROLL
+            logger.info("Scroll yaparak reklamları yüklüyorum...")
+            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight/3);")
+            time.sleep(2)
             self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2);")
-            time.sleep(1)  # 2'den 1'e düşürüldü
+            time.sleep(3)
             self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-            time.sleep(2)  # 3'ten 2'ye düşürüldü
+            time.sleep(3)
+            # Tekrar başa dön
+            self.driver.execute_script("window.scrollTo(0, 0);")
+            time.sleep(2)
+            logger.info("Scroll tamamlandı, elementleri arıyorum...")
             
             # Öncelikli selector'lar - TikTok'un gerçek reklam kartlarını bul
             selectors = [
@@ -508,48 +516,42 @@ class TikTokSeleniumScraper:
                         filtered = []
                         for idx, elem in enumerate(found):
                             try:
-                                text = elem.text.strip().lower()
+                                text = elem.text.strip()
                                 
                                 # Boş elementleri atla
                                 if not text:
-                                    logger.debug(f"Element {idx}: Boş text, atlandi")
                                     continue
                                 
-                                # Form/filter alanlarını text'e göre filtrele (daha hassas)
-                                form_keywords = [
-                                    'target country', 'type', 'published date', 
-                                    'advertiser name or keyword', 'english (us)',
-                                    'filters', 'search results', 'total ads:', 
-                                    'sort by', 'region:', 'date range:', 'keyword',
-                                    'select all', 'search', 'apply', 'reset'
-                                ]
-                                
-                                # Text TAMAMEN form keyword'üne eşitse atla
-                                if any(text.strip() == keyword.strip() for keyword in form_keywords):
-                                    logger.debug(f"Element {idx}: Form keyword '{text[:30]}', atlandi")
+                                # Sadece AÇIKÇA form alanı olanları atla (küçük liste)
+                                form_text_lower = text.lower().strip()
+                                skip_keywords = ['target country', 'advertiser name or keyword', 'english (us)', 'search']
+                                if form_text_lower in skip_keywords:
+                                    logger.debug(f"Element {idx}: Form alanı '{text[:30]}', atlandı")
                                     continue
                                 
-                                # Çok kısa text'leri atla (ama 20 yerine 15 karakter)
-                                if len(text) < 15:
-                                    logger.debug(f"Element {idx}: Çok kısa ({len(text)} char), atlandi")
+                                # Çok kısa text'leri atla (10 karakter)
+                                if len(text) < 10:
                                     continue
                                 
-                                # Gerçek reklam kartı ZORUNLU kontrolü: SADECE link VEYA media içermeli
-                                # Class kontrolü yeterli DEĞİL - sayfa header/footer da 'ad' class'ı içerebilir
+                                # Link/media kontrolü
                                 has_link = len(elem.find_elements(By.CSS_SELECTOR, 'a[href*="detail"], a[href*="ad_id"]')) > 0
-                                has_media = len(elem.find_elements(By.CSS_SELECTOR, 'video, img[src*="ibyteimg"], img[src*="http"]')) > 0
+                                has_media = len(elem.find_elements(By.CSS_SELECTOR, 'video, img[src*="ibyteimg"], img[src*="http"], img')) > 0
                                 
-                                logger.debug(f"Element {idx}: text_len={len(text)}, has_link={has_link}, has_media={has_media}")
+                                logger.debug(f"Element {idx}: text='{text[:50]}', len={len(text)}, has_link={has_link}, has_media={has_media}")
                                 
-                                # ZORUNLU: Link veya media olmalı
+                                # GEVŞEK KONTROL: Link, media VEYA anlamlı text (50+ karakter)
                                 if has_link or has_media:
                                     filtered.append(elem)
-                                    logger.debug(f"Element {idx}: KABUL EDİLDİ (link veya media var)")
+                                    logger.info(f"✓ Element {idx} KABUL: link veya media var")
+                                elif len(text) > 50 and 'ad' in elem.get_attribute('class').lower() if elem.get_attribute('class') else False:
+                                    # Fallback: Uzun text + 'ad' class
+                                    filtered.append(elem)
+                                    logger.info(f"✓ Element {idx} KABUL: uzun text + ad class")
                                 else:
-                                    logger.debug(f"Element {idx}: REDDEDILDI (link/media yok)")
+                                    logger.debug(f"✗ Element {idx} RED: kriterleri karşılamıyor")
                                     
                             except Exception as e:
-                                logger.debug(f"Element {idx} kontrolünde hata: {e}")
+                                logger.debug(f"Element {idx} hatası: {e}")
                                 continue
                         
                         if filtered:
