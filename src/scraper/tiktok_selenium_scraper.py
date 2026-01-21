@@ -707,8 +707,8 @@ class TikTokSeleniumScraper:
                                     break
                     if not data.get('advertiser_name'):
                         data['advertiser_name'] = 'Unknown'
-            except:
-                data['advertiser_name'] = 'Unknown'
+                except:
+                    data['advertiser_name'] = 'Unknown'
             
             # Ad details - tarih ve reach bilgileri (text içinde)
             try:
