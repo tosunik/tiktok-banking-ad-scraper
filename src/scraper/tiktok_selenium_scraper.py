@@ -721,17 +721,17 @@ class TikTokSeleniumScraper:
                         if i + 1 < len(lines):
                             data['first_shown'] = lines[i + 1].strip()
                         else:
-                        data['first_shown'] = line.replace('First shown:', '').strip()
+                            data['first_shown'] = line.replace('First shown:', '').strip()
                     elif 'Last shown:' in line:
                         if i + 1 < len(lines):
                             data['last_shown'] = lines[i + 1].strip()
                         else:
-                        data['last_shown'] = line.replace('Last shown:', '').strip()
+                            data['last_shown'] = line.replace('Last shown:', '').strip()
                     elif 'Unique users seen:' in line:
                         if i + 1 < len(lines):
                             data['reach'] = lines[i + 1].strip()
                         else:
-                        data['reach'] = line.replace('Unique users seen:', '').strip()
+                            data['reach'] = line.replace('Unique users seen:', '').strip()
             except:
                 pass
             
@@ -747,8 +747,8 @@ class TikTokSeleniumScraper:
                     
                     # Ad ID'yi URL'den çıkar
                     if 'ad_id=' in href:
-                    ad_id = href.split('ad_id=')[1].split('&')[0]
-                    data['ad_id'] = ad_id
+                        ad_id = href.split('ad_id=')[1].split('&')[0]
+                        data['ad_id'] = ad_id
             except:
                 # Fallback: Herhangi bir link ara
                 try:
@@ -762,8 +762,8 @@ class TikTokSeleniumScraper:
                             ad_id = href.split('ad_id=')[1].split('&')[0]
                             data['ad_id'] = ad_id
                             break
-            except:
-                pass
+                except:
+                    pass
             
             # Ad text - sadece advertiser name'i al (reklam metni detay sayfasında)
             # Ana sayfada genelde sadece advertiser name var
@@ -943,17 +943,17 @@ class TikTokSeleniumScraper:
                     for elem in all_elements:
                         style = elem.get_attribute('style')
                         if style and 'background-image' in style:
-                url_match = re.search(r'background-image:\s*url\(["\']?(.*?)["\']?\)', style)
-                if url_match:
-                    media_url = url_match.group(1)
+                            url_match = re.search(r'background-image:\s*url\(["\']?(.*?)["\']?\)', style)
+                            if url_match:
+                                media_url = url_match.group(1)
                                 # Placeholder SVG'leri filtrele
                                 if media_url and media_url != 'none' and not media_url.startswith('data:image/svg+xml'):
                                     data['media_urls'].append(media_url)
                                     data['media_type'] = 'image'
                                     logger.info(f"✅ Background image URL bulundu: {media_url[:100]}...")
                                     break
-        except:
-            pass
+                except:
+                    pass
                     
         except Exception as e:
             logger.debug(f"Media extraction hatası: {e}")
