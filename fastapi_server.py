@@ -62,6 +62,7 @@ class ScrapeRequest(BaseModel):
     days_back: int = Field(default=7, ge=1, le=30)
     banking_only: bool = Field(default=True)
     headless: bool = Field(default=True)
+    search_type: str = Field(default="keyword", description="'keyword' or 'advertiser' - keyword searches broadly, advertiser looks for exact company name")
 
 class N8NAdResponse(BaseModel):
     """N8N-friendly ad response format"""
@@ -137,10 +138,11 @@ async def scrape_tiktok_ads(request: ScrapeRequest):
         scraper = TikTokAdScraper(headless=request.headless)
         
         # Execute scraping
-        logger.info(f"Scraping başlatılıyor: {request.max_results} maksimum reklam")
+        logger.info(f"Scraping başlatılıyor: {request.max_results} maksimum reklam, search_type={request.search_type}")
         result = scraper.search_ads(
             keywords=request.keywords,
-            max_results=request.max_results
+            max_results=request.max_results,
+            search_type=request.search_type
         )
         
         # Convert to N8N format - RETURN ARRAY FOR N8N

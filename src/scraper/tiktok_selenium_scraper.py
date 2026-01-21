@@ -339,9 +339,17 @@ class TikTokSeleniumScraper:
     
     def build_search_url(self, 
                         advertiser_name: str = "",
+                        keyword: str = "",
                         region: str = "TR",
                         days_back: int = 30) -> str:
-        """TikTok Ad Library arama URL'i oluştur"""
+        """TikTok Ad Library arama URL'i oluştur
+        
+        Args:
+            advertiser_name: Reklam veren adı (tam eşleşme arar)
+            keyword: Genel keyword (reklam içeriğinde arar) - advertiser_name yerine kullanılabilir
+            region: Ülke kodu
+            days_back: Kaç gün geriye gidilecek
+        """
         
         # Tarih aralığı hesapla (Unix timestamp milisaniye)
         end_time = datetime.now()
@@ -351,11 +359,15 @@ class TikTokSeleniumScraper:
         end_timestamp = int(end_time.timestamp() * 1000)
         
         url = f"{self.base_url}/ads"
+        
+        # Keyword veya advertiser name (ikisi aynı parametreyi kullanıyor)
+        search_term = keyword if keyword else advertiser_name
+        
         params = [
             f"region={region}",
             f"start_time={start_timestamp}",
             f"end_time={end_timestamp}",
-            f"adv_name={advertiser_name}" if advertiser_name else "adv_name=",
+            f"adv_name={search_term}" if search_term else "adv_name=",
             "adv_biz_ids=",  # TikTok'un güncel URL formatında gerekli (boş string)
             "query_type=1",
             "sort_type=last_shown_date,desc"
@@ -414,17 +426,69 @@ class TikTokSeleniumScraper:
         
         return all_ads
     
+    def search_ads_by_keyword(self, keywords: List[str], max_ads: int = 100) -> List[Dict]:
+        """Keyword'lere göre reklam ara (advertiser name değil, genel arama)
+        
+        Args:
+            keywords: Aranacak keyword'ler (örn: ["banka", "kredi"])
+            max_ads: Maksimum reklam sayısı
+            
+        Returns:
+            Bulunan reklamların listesi
+        """
+        all_ads = []
+        
+        if not self.setup_driver():
+            logger.error("WebDriver kurulamadı")
+            return []
+        
+        try:
+            # Her keyword için maksimum reklam sayısı
+            if len(keywords) == 1:
+                max_ads_per_search = max_ads
+            else:
+                max_ads_per_search = max(3, max_ads // len(keywords))
+            
+            logger.info(f"Her keyword için maksimum {max_ads_per_search} reklam aranacak")
+            
+            for kw in keywords:
+                logger.info(f"'{kw}' keyword'ü aranıyor...")
+                
+                search_url = self.build_search_url(keyword=kw)
+                logger.info(f"URL: {search_url}")
+                
+                # Kalan reklam sayısını hesapla
+                remaining_ads = max_ads - len(all_ads)
+                current_max = min(max_ads_per_search, remaining_ads)
+                
+                ads = self._scrape_ads_from_url(search_url, max_ads_per_search=current_max)
+                all_ads.extend(ads)
+                
+                logger.info(f"'{kw}' için {len(ads)} reklam bulundu (Toplam: {len(all_ads)})")
+                
+                # Rate limiting
+                safe_sleep(3, 5)
+                
+                if len(all_ads) >= max_ads:
+                    break
+            
+            logger.info(f"Toplam {len(all_ads)} reklam scrape edildi")
+            
+        except Exception as e:
+            logger.error(f"Selenium scraping hatası: {e}")
+        
+        finally:
+            self.close_driver()
+        
+        return all_ads
+    
     def search_banking_ads(self, max_ads: int = 100) -> List[Dict]:
-        """Türk bankalarının reklamlarını ara"""
+        """Türk bankalarının reklamlarını ara (keyword-based)"""
         
-        # Türk bankaları listesi
-        turkish_banks = [
-            "garanti", "isbank", "yapikredi", "akbank", "halkbank", "vakifbank",
-            "denizbank", "ingbank", "teb", "finansbank", "kuveytturk", "albaraka",
-            "papara", "ininal", "tosla", "param", "ziraat", "enpara"
-        ]
+        # Bankacılık keyword'leri (advertiser name yerine)
+        banking_keywords = ["banka", "kredi", "hesap", "kart"]
         
-        return self.search_ads_by_advertiser(turkish_banks, max_ads)
+        return self.search_ads_by_keyword(banking_keywords, max_ads)
     
     def _scrape_ads_from_url(self, url: str, max_ads_per_search: int = 3) -> List[Dict]:
         """Belirli URL'den reklamları scrape et - Hızlı test versiyonu"""
@@ -464,6 +528,22 @@ class TikTokSeleniumScraper:
             time.sleep(2)
             self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             time.sleep(3)
+            
+            # DEBUG: Screenshot + Network logs kaydet
+            try:
+                screenshot_path = '/app/debug_screenshot.png'
+                self.driver.save_screenshot(screenshot_path)
+                logger.info(f"Screenshot kaydedildi: {screenshot_path}")
+                
+                # Network logs (performance logs)
+                network_logs = self.driver.get_log('performance')
+                import json
+                network_path = '/app/debug_network.json'
+                with open(network_path, 'w') as f:
+                    json.dump(network_logs, f, indent=2)
+                logger.info(f"Network logs kaydedildi: {network_path} ({len(network_logs)} entries)")
+            except Exception as debug_e:
+                logger.warning(f"Debug dosyaları kaydedilemedi: {debug_e}")
             
             # Reklam kartlarını bul
             ad_elements = self._find_ad_elements()

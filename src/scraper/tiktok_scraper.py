@@ -20,17 +20,29 @@ class TikTokAdScraper:
         self.selenium_scraper = TikTokSeleniumScraper(headless=headless)
         self.scraped_ads = []
         
-    def search_ads(self, keywords: List[str], max_results: int = 200) -> ScrapingResult:
-        """TikTok'ta reklam ara - Selenium ile"""
+    def search_ads(self, keywords: List[str], max_results: int = 200, search_type: str = "keyword") -> ScrapingResult:
+        """TikTok'ta reklam ara - Selenium ile
+        
+        Args:
+            keywords: Aranacak kelimeler
+            max_results: Maksimum reklam sayısı
+            search_type: "keyword" = genel arama, "advertiser" = şirket adı araması
+        """
         result = ScrapingResult()
         
         try:
-            logger.info(f"Selenium ile TikTok scraping başlatılıyor... Keywords: {keywords}")
+            logger.info(f"Selenium ile TikTok scraping başlatılıyor... Keywords: {keywords}, Search type: {search_type}")
             
-            # Keywords parametresini kullan - eğer keywords verilmişse onları kullan
+            # Keywords parametresini kullan
             if keywords and len(keywords) > 0:
-                # Kullanıcının verdiği keyword'leri advertiser name olarak ara
-                raw_ads_data = self.selenium_scraper.search_ads_by_advertiser(keywords, max_results)
+                if search_type == "keyword":
+                    # KEYWORD SEARCH: Reklam içeriğinde ara (daha geniş)
+                    logger.info(f"KEYWORD araması: {keywords}")
+                    raw_ads_data = self.selenium_scraper.search_ads_by_keyword(keywords, max_results)
+                else:
+                    # ADVERTISER SEARCH: Şirket adında ara (dar)
+                    logger.info(f"ADVERTISER araması: {keywords}")
+                    raw_ads_data = self.selenium_scraper.search_ads_by_advertiser(keywords, max_results)
             else:
                 # Keywords yoksa tüm bankaları ara (fallback)
                 raw_ads_data = self.selenium_scraper.search_banking_ads(max_results)
