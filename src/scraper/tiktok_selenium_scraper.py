@@ -530,7 +530,7 @@ class TikTokSeleniumScraper:
                 logger.info(f"Debug: Sayfa kaynağı '{debug_path}' dosyasına kaydedildi")
             except Exception as debug_e:
                 logger.debug(f"Debug dosyası kaydedilemedi: {debug_e}")
-            return []
+                return []
             
         except Exception as e:
             logger.error(f"Element bulma hatası: {e}")
@@ -573,11 +573,51 @@ class TikTokSeleniumScraper:
         data = {}
         
         try:
+            # #region agent log
+            try:
+                with open("/Users/oguzhantosun/.cursor/debug.log", "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "sessionId": "debug-session",
+                        "runId": "video-debug-1",
+                        "hypothesisId": "A",
+                        "location": "tiktok_selenium_scraper.py:_extract_from_selenium_element:start",
+                        "message": "Fast test mode active; detail-page video extraction is skipped",
+                        "data": {
+                            "fast_test_mode": True,
+                            "tag_name": getattr(element, "tag_name", None),
+                            "class_attr": (element.get_attribute("class") or "")[:120]
+                        },
+                        "timestamp": int(time.time() * 1000)
+                    }) + "\n")
+            except Exception:
+                pass
+            # #endregion
+
             # TEST İÇİN: Video extraction'ı atla (çok yavaş - detay sayfasına gitmek 15+ saniye sürüyor)
             # Sadece thumbnail ve metadata çıkar
-            data.update(self._original_media_extraction(element))
+                data.update(self._original_media_extraction(element))
             data.update(self._extract_ad_metadata(element))
             data['extraction_method'] = 'fast_test_mode'
+
+            # #region agent log
+            try:
+                with open("/Users/oguzhantosun/.cursor/debug.log", "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "sessionId": "debug-session",
+                        "runId": "video-debug-1",
+                        "hypothesisId": "B",
+                        "location": "tiktok_selenium_scraper.py:_extract_from_selenium_element:after_media",
+                        "message": "Media extraction result (fast mode)",
+                        "data": {
+                            "media_type": data.get("media_type"),
+                            "media_urls_count": len(data.get("media_urls", [])),
+                            "first_media_url": (data.get("media_urls") or [None])[0]
+                        },
+                        "timestamp": int(time.time() * 1000)
+                    }) + "\n")
+            except Exception:
+                pass
+            # #endregion
             
         except Exception as e:
             logger.error(f"Extraction hatası: {e}")
@@ -667,8 +707,8 @@ class TikTokSeleniumScraper:
                                     break
                     if not data.get('advertiser_name'):
                         data['advertiser_name'] = 'Unknown'
-                except:
-                    data['advertiser_name'] = 'Unknown'
+            except:
+                data['advertiser_name'] = 'Unknown'
             
             # Ad details - tarih ve reach bilgileri (text içinde)
             try:
@@ -681,17 +721,17 @@ class TikTokSeleniumScraper:
                         if i + 1 < len(lines):
                             data['first_shown'] = lines[i + 1].strip()
                         else:
-                            data['first_shown'] = line.replace('First shown:', '').strip()
+                        data['first_shown'] = line.replace('First shown:', '').strip()
                     elif 'Last shown:' in line:
                         if i + 1 < len(lines):
                             data['last_shown'] = lines[i + 1].strip()
                         else:
-                            data['last_shown'] = line.replace('Last shown:', '').strip()
+                        data['last_shown'] = line.replace('Last shown:', '').strip()
                     elif 'Unique users seen:' in line:
                         if i + 1 < len(lines):
                             data['reach'] = lines[i + 1].strip()
                         else:
-                            data['reach'] = line.replace('Unique users seen:', '').strip()
+                        data['reach'] = line.replace('Unique users seen:', '').strip()
             except:
                 pass
             
@@ -707,8 +747,8 @@ class TikTokSeleniumScraper:
                     
                     # Ad ID'yi URL'den çıkar
                     if 'ad_id=' in href:
-                        ad_id = href.split('ad_id=')[1].split('&')[0]
-                        data['ad_id'] = ad_id
+                    ad_id = href.split('ad_id=')[1].split('&')[0]
+                    data['ad_id'] = ad_id
             except:
                 # Fallback: Herhangi bir link ara
                 try:
@@ -722,8 +762,8 @@ class TikTokSeleniumScraper:
                             ad_id = href.split('ad_id=')[1].split('&')[0]
                             data['ad_id'] = ad_id
                             break
-                except:
-                    pass
+            except:
+                pass
             
             # Ad text - sadece advertiser name'i al (reklam metni detay sayfasında)
             # Ana sayfada genelde sadece advertiser name var
@@ -744,6 +784,33 @@ class TikTokSeleniumScraper:
         }
         
         try:
+            # İlk görünürlük için sayım
+            try:
+                video_count = len(element.find_elements(By.CSS_SELECTOR, 'video'))
+                img_count = len(element.find_elements(By.CSS_SELECTOR, 'img'))
+            except Exception:
+                video_count = -1
+                img_count = -1
+
+            # #region agent log
+            try:
+                with open("/Users/oguzhantosun/.cursor/debug.log", "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "sessionId": "debug-session",
+                        "runId": "video-debug-1",
+                        "hypothesisId": "D",
+                        "location": "tiktok_selenium_scraper.py:_original_media_extraction:counts",
+                        "message": "Base media element counts on ad card",
+                        "data": {
+                            "video_elements": video_count,
+                            "image_elements": img_count
+                        },
+                        "timestamp": int(time.time() * 1000)
+                    }) + "\n")
+            except Exception:
+                pass
+            # #endregion
+
             # Video elementlerini bul
             video_selectors = [
                 'video',
@@ -756,12 +823,60 @@ class TikTokSeleniumScraper:
                 try:
                     videos = element.find_elements(By.CSS_SELECTOR, selector)
                     for video in videos:
-                        src = video.get_attribute('src')
-                        if src and ('video' in src.lower() or '.mp4' in src.lower()):
-                            data['media_urls'].append(src)
+                        video_url = None
+                        
+                        # 1. Önce <source> tag'lerini kontrol et (en güvenilir)
+                        try:
+                            sources = video.find_elements(By.TAG_NAME, 'source')
+                            for source in sources:
+                                src = source.get_attribute('src')
+                                if src and ('ibyteimg.com' in src or '.mp4' in src.lower() or 'video' in src.lower()):
+                                    video_url = src
+                                    logger.info(f"✅ Video URL <source> tag'inden bulundu: {src[:100]}...")
+                                    break
+                        except:
+                            pass
+                        
+                        # 2. Video tag'inin src attribute'ü (ikinci seçenek)
+                        if not video_url:
+                            src = video.get_attribute('src')
+                            if src and ('ibyteimg.com' in src or '.mp4' in src.lower() or 'video' in src.lower()):
+                                video_url = src
+                                logger.info(f"✅ Video URL video.src'den bulundu: {src[:100]}...")
+                        
+                        # 3. Poster attribute kontrolü (thumbnail - fallback)
+                        # NOT: Poster genelde thumbnail'dir, gerçek video değil!
+                        if not video_url:
+                            poster = video.get_attribute('poster')
+                            if poster and 'ibyteimg.com' in poster:
+                                # Bu muhtemelen thumbnail, ama hiç yoktan iyidir
+                                video_url = poster
+                                logger.warning(f"⚠️ Sadece poster (thumbnail) bulundu: {poster[:100]}...")
+                        
+                        if video_url:
+                            data['media_urls'].append(video_url)
                             data['media_type'] = 'video'
                             data['video_found'] = True
-                            logger.info(f"✅ Video URL bulundu: {src[:100]}...")
+                            # #region agent log
+                            try:
+                                with open("/Users/oguzhantosun/.cursor/debug.log", "a", encoding="utf-8") as f:
+                                    f.write(json.dumps({
+                                        "sessionId": "debug-session",
+                                        "runId": "video-debug-1",
+                                        "hypothesisId": "C",
+                                        "location": "tiktok_selenium_scraper.py:_original_media_extraction:video_found",
+                                        "message": "Video URL found from DOM element",
+                                        "data": {
+                                            "selector": selector,
+                                            "src": video_url[:160] if video_url else None,
+                                            "tag_name": video.tag_name,
+                                            "has_source_tags": len(video.find_elements(By.TAG_NAME, 'source')) > 0
+                                        },
+                                        "timestamp": int(time.time() * 1000)
+                                    }) + "\n")
+                            except Exception:
+                                pass
+                            # #endregion
                             break
                     if data['video_found']:
                         break
@@ -792,6 +907,28 @@ class TikTokSeleniumScraper:
                                     data['media_urls'].append(src)
                                     data['media_type'] = 'image'
                                     logger.info(f"✅ Image URL bulundu: {src[:100]}...")
+                                    # #region agent log
+                                    try:
+                                        looks_like_video = ('video' in src.lower() or '.mp4' in src.lower())
+                                        looks_like_thumb = bool(re.search(r'(thumb|poster|preview|cover|ibyteimg)', src, re.IGNORECASE))
+                                        with open("/Users/oguzhantosun/.cursor/debug.log", "a", encoding="utf-8") as f:
+                                            f.write(json.dumps({
+                                                "sessionId": "debug-session",
+                                                "runId": "video-debug-1",
+                                                "hypothesisId": "B",
+                                                "location": "tiktok_selenium_scraper.py:_original_media_extraction:image_found",
+                                                "message": "Image URL chosen (possible thumbnail)",
+                                                "data": {
+                                                    "selector": selector,
+                                                    "src": src[:160],
+                                                    "looks_like_video": looks_like_video,
+                                                    "looks_like_thumbnail": looks_like_thumb
+                                                },
+                                                "timestamp": int(time.time() * 1000)
+                                            }) + "\n")
+                                    except Exception:
+                                        pass
+                                    # #endregion
                                     break
                         if data['media_urls']:
                             break
@@ -806,17 +943,17 @@ class TikTokSeleniumScraper:
                     for elem in all_elements:
                         style = elem.get_attribute('style')
                         if style and 'background-image' in style:
-                            url_match = re.search(r'background-image:\s*url\(["\']?(.*?)["\']?\)', style)
-                            if url_match:
-                                media_url = url_match.group(1)
+                url_match = re.search(r'background-image:\s*url\(["\']?(.*?)["\']?\)', style)
+                if url_match:
+                    media_url = url_match.group(1)
                                 # Placeholder SVG'leri filtrele
                                 if media_url and media_url != 'none' and not media_url.startswith('data:image/svg+xml'):
                                     data['media_urls'].append(media_url)
                                     data['media_type'] = 'image'
                                     logger.info(f"✅ Background image URL bulundu: {media_url[:100]}...")
                                     break
-                except:
-                    pass
+        except:
+            pass
                     
         except Exception as e:
             logger.debug(f"Media extraction hatası: {e}")
