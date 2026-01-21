@@ -502,62 +502,61 @@ class TikTokSeleniumScraper:
                 try:
                     found = self.driver.find_elements(By.CSS_SELECTOR, selector)
                     if found:
+                        logger.debug(f"Selector {selector} ile {len(found)} element bulundu")
+                        
                         # UI elementlerini filtrele - gerçek reklam kartlarını bul
                         filtered = []
-                        for elem in found:
-                            # ÖNCE form/filter alanlarını atla
+                        for idx, elem in enumerate(found):
                             try:
-                                # Input, select, button içinde olmamalı
-                                parent = elem
-                                is_form_element = False
-                                for _ in range(3):  # 3 seviye yukarı kontrol et
-                                    tag = parent.tag_name.lower()
-                                    if tag in ['input', 'select', 'button', 'form', 'label']:
-                                        is_form_element = True
-                                        break
-                                    try:
-                                        parent = parent.find_element(By.XPATH, '..')
-                                    except:
-                                        break
+                                text = elem.text.strip().lower()
                                 
-                                if is_form_element:
+                                # Boş elementleri atla
+                                if not text:
+                                    logger.debug(f"Element {idx}: Boş text, atlandi")
                                     continue
-                            except:
-                                pass
-                            
-                            text = elem.text.strip().lower()
-                            
-                            # En az 20 karakter içerik olmalı (form alanları kısa)
-                            if not text or len(text) < 20:
-                                continue
-                            
-                            # Form/filter alanlarını atla
-                            form_keywords = [
-                                'target country', 'type', 'published date', 
-                                'advertiser name or keyword', 'english (us)',
-                                'filters', 'search results', 'total ads:', 
-                                'sort by', 'region:', 'date range:', 'keyword',
-                                'select all', 'search', 'apply', 'reset',
-                                'from', 'to', 'all regions', 'all types'
-                            ]
-                            
-                            # Eğer text sadece form keyword'ü ise atla
-                            if any(text == keyword or text.startswith(keyword) for keyword in form_keywords):
-                                continue
-                            
-                            # Gerçek reklam kartı kontrolü: link veya media içermeli
-                            try:
-                                has_link = len(elem.find_elements(By.CSS_SELECTOR, 'a[href*="detail"], a[href*="ad_id"]')) > 0
-                                has_media = len(elem.find_elements(By.CSS_SELECTOR, 'video, img[src*="ibyteimg"]')) > 0
                                 
-                                if has_link or has_media:
+                                # Form/filter alanlarını text'e göre filtrele (daha hassas)
+                                form_keywords = [
+                                    'target country', 'type', 'published date', 
+                                    'advertiser name or keyword', 'english (us)',
+                                    'filters', 'search results', 'total ads:', 
+                                    'sort by', 'region:', 'date range:', 'keyword',
+                                    'select all', 'search', 'apply', 'reset'
+                                ]
+                                
+                                # Text TAMAMEN form keyword'üne eşitse atla
+                                if any(text.strip() == keyword.strip() for keyword in form_keywords):
+                                    logger.debug(f"Element {idx}: Form keyword '{text[:30]}', atlandi")
+                                    continue
+                                
+                                # Çok kısa text'leri atla (ama 20 yerine 15 karakter)
+                                if len(text) < 15:
+                                    logger.debug(f"Element {idx}: Çok kısa ({len(text)} char), atlandi")
+                                    continue
+                                
+                                # Gerçek reklam kartı kontrolü: link VEYA media içermeli
+                                has_link = len(elem.find_elements(By.CSS_SELECTOR, 'a[href*="detail"], a[href*="ad_id"]')) > 0
+                                has_media = len(elem.find_elements(By.CSS_SELECTOR, 'video, img[src*="ibyteimg"], img[src*="http"]')) > 0
+                                has_ad_content = 'ad' in elem.get_attribute('class').lower() if elem.get_attribute('class') else False
+                                
+                                logger.debug(f"Element {idx}: text_len={len(text)}, has_link={has_link}, has_media={has_media}, has_ad_class={has_ad_content}")
+                                
+                                # En az biri true olmalı
+                                if has_link or has_media or (has_ad_content and len(text) > 30):
                                     filtered.append(elem)
-                            except:
-                                pass
+                                    logger.debug(f"Element {idx}: KABUL EDİLDİ")
+                                else:
+                                    logger.debug(f"Element {idx}: Reklam değil, atlandi")
+                                    
+                            except Exception as e:
+                                logger.debug(f"Element {idx} kontrolünde hata: {e}")
+                                continue
                         
                         if filtered:
                             logger.info(f"✅ {len(filtered)} gerçek reklam kartı bulundu (selector: {selector})")
                             return filtered
+                        else:
+                            logger.debug(f"Selector {selector}: Filtreleme sonrası 0 element kaldı")
                 except Exception as e:
                     logger.debug(f"Selector {selector} ile hata: {e}")
                     continue
