@@ -167,10 +167,10 @@ Uygulama ayarları `src/config/settings.py` dosyasında bulunur:
 ```json
 {
   "summary": {
-    "total_ads": 50,
-    "banking_ads": 12,
-    "video_ads": 30,
-    "image_ads": 15,
+  "total_ads": 50,
+  "banking_ads": 12,
+  "video_ads": 30,
+  "image_ads": 15,
     "duration_seconds": 45.2
   },
   "ads": [...]
