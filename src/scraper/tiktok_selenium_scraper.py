@@ -505,16 +505,58 @@ class TikTokSeleniumScraper:
                         # UI elementlerini filtrele - gerçek reklam kartlarını bul
                         filtered = []
                         for elem in found:
-                            text = elem.text.strip()
-                            # En az 10 karakter içerik olmalı ve UI metinlerini atla
-                            if text and len(text) > 10:
-                                # "Filters", "Search results", "Total ads: 0" gibi UI metinlerini atla
-                                ui_keywords = ['Filters', 'Search results', 'Total ads:', 'Sort by', 'Region:', 'Date range:']
-                                if not any(ui_keyword in text for ui_keyword in ui_keywords):
+                            # ÖNCE form/filter alanlarını atla
+                            try:
+                                # Input, select, button içinde olmamalı
+                                parent = elem
+                                is_form_element = False
+                                for _ in range(3):  # 3 seviye yukarı kontrol et
+                                    tag = parent.tag_name.lower()
+                                    if tag in ['input', 'select', 'button', 'form', 'label']:
+                                        is_form_element = True
+                                        break
+                                    try:
+                                        parent = parent.find_element(By.XPATH, '..')
+                                    except:
+                                        break
+                                
+                                if is_form_element:
+                                    continue
+                            except:
+                                pass
+                            
+                            text = elem.text.strip().lower()
+                            
+                            # En az 20 karakter içerik olmalı (form alanları kısa)
+                            if not text or len(text) < 20:
+                                continue
+                            
+                            # Form/filter alanlarını atla
+                            form_keywords = [
+                                'target country', 'type', 'published date', 
+                                'advertiser name or keyword', 'english (us)',
+                                'filters', 'search results', 'total ads:', 
+                                'sort by', 'region:', 'date range:', 'keyword',
+                                'select all', 'search', 'apply', 'reset',
+                                'from', 'to', 'all regions', 'all types'
+                            ]
+                            
+                            # Eğer text sadece form keyword'ü ise atla
+                            if any(text == keyword or text.startswith(keyword) for keyword in form_keywords):
+                                continue
+                            
+                            # Gerçek reklam kartı kontrolü: link veya media içermeli
+                            try:
+                                has_link = len(elem.find_elements(By.CSS_SELECTOR, 'a[href*="detail"], a[href*="ad_id"]')) > 0
+                                has_media = len(elem.find_elements(By.CSS_SELECTOR, 'video, img[src*="ibyteimg"]')) > 0
+                                
+                                if has_link or has_media:
                                     filtered.append(elem)
+                            except:
+                                pass
                         
                         if filtered:
-                            logger.info(f"✅ {len(filtered)} reklam elementi bulundu (selector: {selector})")
+                            logger.info(f"✅ {len(filtered)} gerçek reklam kartı bulundu (selector: {selector})")
                             return filtered
                 except Exception as e:
                     logger.debug(f"Selector {selector} ile hata: {e}")
