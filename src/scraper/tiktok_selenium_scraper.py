@@ -533,22 +533,23 @@ class TikTokSeleniumScraper:
                                 if len(text) < 10:
                                     continue
                                 
-                                # Link/media kontrolü
+                                # Link/media kontrolü - SIKLAŞTIRILMIŞ
+                                # Sadece TikTok reklam içeriği (ibyteimg CDN)
                                 has_link = len(elem.find_elements(By.CSS_SELECTOR, 'a[href*="detail"], a[href*="ad_id"]')) > 0
-                                has_media = len(elem.find_elements(By.CSS_SELECTOR, 'video, img[src*="ibyteimg"], img[src*="http"], img')) > 0
+                                has_real_media = len(elem.find_elements(By.CSS_SELECTOR, 'video, img[src*="ibyteimg"]')) > 0
                                 
-                                logger.debug(f"Element {idx}: text='{text[:50]}', len={len(text)}, has_link={has_link}, has_media={has_media}")
+                                logger.debug(f"Element {idx}: text='{text[:50]}', len={len(text)}, has_link={has_link}, has_real_media={has_real_media}")
                                 
-                                # GEVŞEK KONTROL: Link, media VEYA anlamlı text (50+ karakter)
-                                if has_link or has_media:
+                                # SIKLAŞTIRILMIŞ: has_link ZORUNLU (media yeterli değil, logo/icon olabilir)
+                                if has_link:
                                     filtered.append(elem)
-                                    logger.info(f"✓ Element {idx} KABUL: link veya media var")
-                                elif len(text) > 50 and 'ad' in elem.get_attribute('class').lower() if elem.get_attribute('class') else False:
-                                    # Fallback: Uzun text + 'ad' class
+                                    logger.info(f"✓ Element {idx} KABUL: reklam linki var")
+                                # Fallback: Gerçek media (ibyteimg CDN) + uzun text (100+)
+                                elif has_real_media and len(text) > 100:
                                     filtered.append(elem)
-                                    logger.info(f"✓ Element {idx} KABUL: uzun text + ad class")
+                                    logger.info(f"✓ Element {idx} KABUL: TikTok CDN media + uzun text")
                                 else:
-                                    logger.debug(f"✗ Element {idx} RED: kriterleri karşılamıyor")
+                                    logger.debug(f"✗ Element {idx} RED: link yok (media: {has_real_media}, len: {len(text)})")
                                     
                             except Exception as e:
                                 logger.debug(f"Element {idx} hatası: {e}")
