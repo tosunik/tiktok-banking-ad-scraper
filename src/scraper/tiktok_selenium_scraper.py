@@ -534,19 +534,19 @@ class TikTokSeleniumScraper:
                                     logger.debug(f"Element {idx}: Çok kısa ({len(text)} char), atlandi")
                                     continue
                                 
-                                # Gerçek reklam kartı kontrolü: link VEYA media içermeli
+                                # Gerçek reklam kartı ZORUNLU kontrolü: SADECE link VEYA media içermeli
+                                # Class kontrolü yeterli DEĞİL - sayfa header/footer da 'ad' class'ı içerebilir
                                 has_link = len(elem.find_elements(By.CSS_SELECTOR, 'a[href*="detail"], a[href*="ad_id"]')) > 0
                                 has_media = len(elem.find_elements(By.CSS_SELECTOR, 'video, img[src*="ibyteimg"], img[src*="http"]')) > 0
-                                has_ad_content = 'ad' in elem.get_attribute('class').lower() if elem.get_attribute('class') else False
                                 
-                                logger.debug(f"Element {idx}: text_len={len(text)}, has_link={has_link}, has_media={has_media}, has_ad_class={has_ad_content}")
+                                logger.debug(f"Element {idx}: text_len={len(text)}, has_link={has_link}, has_media={has_media}")
                                 
-                                # En az biri true olmalı
-                                if has_link or has_media or (has_ad_content and len(text) > 30):
+                                # ZORUNLU: Link veya media olmalı
+                                if has_link or has_media:
                                     filtered.append(elem)
-                                    logger.debug(f"Element {idx}: KABUL EDİLDİ")
+                                    logger.debug(f"Element {idx}: KABUL EDİLDİ (link veya media var)")
                                 else:
-                                    logger.debug(f"Element {idx}: Reklam değil, atlandi")
+                                    logger.debug(f"Element {idx}: REDDEDILDI (link/media yok)")
                                     
                             except Exception as e:
                                 logger.debug(f"Element {idx} kontrolünde hata: {e}")
