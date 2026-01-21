@@ -841,17 +841,32 @@ class TikTokSeleniumScraper:
                         if not video_url:
                             src = video.get_attribute('src')
                             if src and ('ibyteimg.com' in src or '.mp4' in src.lower() or 'video' in src.lower()):
-                                video_url = src
-                                logger.info(f"✅ Video URL video.src'den bulundu: {src[:100]}...")
+                                # URL'nin gerçekten video olup olmadığını kontrol et
+                                if not src.endswith('.jpg') and not src.endswith('.jpeg') and not src.endswith('.png'):
+                                    video_url = src
+                                    logger.info(f"✅ Video URL video.src'den bulundu: {src[:100]}...")
                         
-                        # 3. Poster attribute kontrolü (thumbnail - fallback)
-                        # NOT: Poster genelde thumbnail'dir, gerçek video değil!
+                        # 3. data-src, data-video-url gibi attribute'leri kontrol et
+                        if not video_url:
+                            for attr in ['data-src', 'data-video-url', 'data-url', 'data-video']:
+                                src = video.get_attribute(attr)
+                                if src and 'ibyteimg.com' in src:
+                                    if not src.endswith(('.jpg', '.jpeg', '.png', '.gif')):
+                                        video_url = src
+                                        logger.info(f"✅ Video URL {attr} attribute'ünden bulundu: {src[:100]}...")
+                                        break
+                        
+                        # 4. Poster attribute kontrolü - SADECE gerçek video bulunamazsa
+                        # NOT: Poster thumbnail'dir, gerçek video DEĞİL!
                         if not video_url:
                             poster = video.get_attribute('poster')
                             if poster and 'ibyteimg.com' in poster:
-                                # Bu muhtemelen thumbnail, ama hiç yoktan iyidir
-                                video_url = poster
-                                logger.warning(f"⚠️ Sadece poster (thumbnail) bulundu: {poster[:100]}...")
+                                # Poster'ı KULLANMA - media_type'ı image yap
+                                logger.warning(f"⚠️ Sadece poster (thumbnail/image) bulundu, gerçek video yok: {poster[:100]}...")
+                                # Poster'ı media_urls'e ekle ama media_type'ı image yap
+                                data['media_urls'].append(poster)
+                                data['media_type'] = 'image'  # Video değil, image!
+                                break  # Loop'tan çık, image bulundu
                         
                         if video_url:
                             data['media_urls'].append(video_url)
