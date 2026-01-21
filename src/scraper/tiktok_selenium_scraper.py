@@ -433,19 +433,37 @@ class TikTokSeleniumScraper:
         try:
             self.driver.get(url)
             
-            # Sayfanın yüklenmesini bekle (20'den 8'e düşürüldü)
-            WebDriverWait(self.driver, 8).until(
+            # Sayfanın yüklenmesini bekle
+            WebDriverWait(self.driver, 10).until(
                 EC.presence_of_element_located((By.TAG_NAME, "body"))
             )
             
-            # Dinamik içerik için bekle (10'dan 3'e düşürüldü)
+            logger.info("Sayfa yüklendi, Search butonunu arıyorum...")
             time.sleep(3)
             
-            # Scroll yaparak içeriği yükle (beklemeleri azalt)
+            # ZORUNLU: Search butonuna tıkla (URL parametresi çalışmıyor!)
+            # Advertiser name zaten input'ta (URL'den geldi), sadece Search'e tıkla
+            try:
+                # Search butonunu bul ve tıkla
+                search_button = WebDriverWait(self.driver, 5).until(
+                    EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Search') or contains(text(), 'search')]"))
+                )
+                logger.info("Search butonuna tıklıyorum...")
+                search_button.click()
+                
+                # Sonuçların yüklenmesini UZUN BEKLE
+                logger.info("Filtrelenmiş sonuçlar yükleniyor...")
+                time.sleep(8)
+                
+            except Exception as e:
+                logger.warning(f"Search butonuna tıklanamadı (devam ediliyor): {e}")
+                time.sleep(3)
+            
+            # Scroll yaparak içeriği yükle
             self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2);")
-            time.sleep(1)  # 3'ten 1'e düşürüldü
+            time.sleep(2)
             self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-            time.sleep(2)  # 3'ten 2'ye düşürüldü
+            time.sleep(3)
             
             # Reklam kartlarını bul
             ad_elements = self._find_ad_elements()
