@@ -20,13 +20,20 @@ class TikTokAdScraper:
         self.selenium_scraper = TikTokSeleniumScraper(headless=headless)
         self.scraped_ads = []
         
-    def search_ads(self, keywords: List[str], max_results: int = 200, search_type: str = "keyword") -> ScrapingResult:
+    def search_ads(self, 
+                   keywords: List[str], 
+                   max_results: int = 200, 
+                   search_type: str = "keyword",
+                   advertiser_blacklist: Optional[List[str]] = None,
+                   advertiser_whitelist: Optional[List[str]] = None) -> ScrapingResult:
         """TikTok'ta reklam ara - Selenium ile
         
         Args:
             keywords: Aranacak kelimeler
             max_results: Maksimum reklam sayısı
             search_type: "keyword" = genel arama, "advertiser" = şirket adı araması
+            advertiser_blacklist: Hariç tutulacak advertiser'lar (örn: ['QNB', 'ING'])
+            advertiser_whitelist: Sadece dahil edilecek advertiser'lar (örn: ['GARANTI', 'AKBANK'])
         """
         result = ScrapingResult()
         
@@ -49,29 +56,59 @@ class TikTokAdScraper:
             
             logger.info(f"Raw data alındı: {len(raw_ads_data)} reklam")
             
-            # Reklamları işle
+            # Reklamları işle ve filtrele
+            filtered_count = 0
             for ad_data in raw_ads_data:
                 try:
                     ad = self._create_ad_from_selenium_data(ad_data)
-                    if ad:
-                        self.scraped_ads.append(ad)
-                        result.total_ads += 1
-                        
-                        if ad.is_banking_ad:
-                            result.banking_ads += 1
-                        
-                        if ad.is_video():
-                            result.video_ads += 1
-                        elif ad.is_image():
-                            result.image_ads += 1
-                        else:
-                            result.text_ads += 1
+                    if not ad:
+                        continue
+                    
+                    advertiser_name = (ad.advertiser_name or "").upper()
+                    
+                    # BLACKLIST kontrolü (önce)
+                    if advertiser_blacklist:
+                        is_blacklisted = any(
+                            blacklisted.upper() in advertiser_name 
+                            for blacklisted in advertiser_blacklist
+                        )
+                        if is_blacklisted:
+                            logger.debug(f"Reklam blacklist nedeniyle filtrelendi: {ad.advertiser_name}")
+                            filtered_count += 1
+                            continue
+                    
+                    # WHITELIST kontrolü (sonra)
+                    if advertiser_whitelist:
+                        is_whitelisted = any(
+                            whitelisted.upper() in advertiser_name 
+                            for whitelisted in advertiser_whitelist
+                        )
+                        if not is_whitelisted:
+                            logger.debug(f"Reklam whitelist nedeniyle filtrelendi: {ad.advertiser_name}")
+                            filtered_count += 1
+                            continue
+                    
+                    # Filtrelerden geçti, ekle
+                    self.scraped_ads.append(ad)
+                    result.total_ads += 1
+                    
+                    if ad.is_banking_ad:
+                        result.banking_ads += 1
+                    
+                    if ad.is_video():
+                        result.video_ads += 1
+                    elif ad.is_image():
+                        result.image_ads += 1
+                    else:
+                        result.text_ads += 1
                     
                 except Exception as e:
                     logger.error(f"Reklam işlenirken hata: {e}")
                     result.failed_ads += 1
                     result.add_error(f"Reklam işleme hatası: {str(e)}")
             
+            if filtered_count > 0:
+                logger.info(f"Filtre ile {filtered_count} reklam hariç tutuldu")
             logger.info(f"Scraping tamamlandı. Toplam: {result.total_ads}, Banking: {result.banking_ads}")
             
         except Exception as e:

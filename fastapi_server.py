@@ -63,6 +63,8 @@ class ScrapeRequest(BaseModel):
     banking_only: bool = Field(default=True)
     headless: bool = Field(default=True)
     search_type: str = Field(default="keyword", description="'keyword' or 'advertiser' - keyword searches broadly, advertiser looks for exact company name")
+    advertiser_blacklist: Optional[List[str]] = Field(default=None, description="Exclude advertisers containing these keywords (e.g., ['QNB', 'ING'])")
+    advertiser_whitelist: Optional[List[str]] = Field(default=None, description="Only include advertisers containing these keywords (e.g., ['GARANTI', 'AKBANK'])")
 
 class N8NAdResponse(BaseModel):
     """N8N-friendly ad response format"""
@@ -139,10 +141,17 @@ async def scrape_tiktok_ads(request: ScrapeRequest):
         
         # Execute scraping
         logger.info(f"Scraping başlatılıyor: {request.max_results} maksimum reklam, search_type={request.search_type}")
+        if request.advertiser_blacklist:
+            logger.info(f"Advertiser blacklist: {request.advertiser_blacklist}")
+        if request.advertiser_whitelist:
+            logger.info(f"Advertiser whitelist: {request.advertiser_whitelist}")
+        
         result = scraper.search_ads(
             keywords=request.keywords,
             max_results=request.max_results,
-            search_type=request.search_type
+            search_type=request.search_type,
+            advertiser_blacklist=request.advertiser_blacklist,
+            advertiser_whitelist=request.advertiser_whitelist
         )
         
         # Convert to N8N format - RETURN ARRAY FOR N8N
