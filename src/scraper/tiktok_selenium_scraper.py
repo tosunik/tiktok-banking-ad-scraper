@@ -505,6 +505,41 @@ class TikTokSeleniumScraper:
             logger.info("Sayfa yüklendi, Search butonunu arıyorum...")
             time.sleep(3)
             
+            # #region agent log
+            # DEBUG: Sayfadaki tüm butonları logla
+            try:
+                import json
+                debug_log_path = '/Users/oguzhantosun/.cursor/debug.log'
+                current_url = self.driver.current_url
+                all_buttons = self.driver.find_elements(By.TAG_NAME, "button")
+                button_texts = [btn.text for btn in all_buttons[:10]]  # İlk 10 buton
+                
+                # Total ads değerini bul
+                total_ads_text = "not_found"
+                try:
+                    total_elem = self.driver.find_element(By.XPATH, "//*[contains(text(), 'Total ads')]")
+                    total_ads_text = total_elem.text
+                except:
+                    pass
+                
+                with open(debug_log_path, 'a') as f:
+                    f.write(json.dumps({
+                        "timestamp": int(time.time() * 1000),
+                        "location": "tiktok_selenium_scraper.py:510",
+                        "message": "Pre-search button state",
+                        "data": {
+                            "url": current_url,
+                            "buttons_found": len(all_buttons),
+                            "button_texts": button_texts,
+                            "total_ads_text": total_ads_text
+                        },
+                        "sessionId": "debug-session",
+                        "hypothesisId": "A"
+                    }) + '\n')
+            except Exception as log_e:
+                logger.debug(f"Debug log failed: {log_e}")
+            # #endregion
+            
             # ZORUNLU: Search butonuna tıkla (URL parametresi çalışmıyor!)
             # Advertiser name zaten input'ta (URL'den geldi), sadece Search'e tıkla
             try:
@@ -519,9 +554,61 @@ class TikTokSeleniumScraper:
                 logger.info("Filtrelenmiş sonuçlar yükleniyor...")
                 time.sleep(8)
                 
+                # #region agent log
+                # DEBUG: Search'ten sonra durum
+                try:
+                    import json
+                    debug_log_path = '/Users/oguzhantosun/.cursor/debug.log'
+                    post_url = self.driver.current_url
+                    post_total_ads = "not_found"
+                    try:
+                        total_elem = self.driver.find_element(By.XPATH, "//*[contains(text(), 'Total ads')]")
+                        post_total_ads = total_elem.text
+                    except:
+                        pass
+                    
+                    with open(debug_log_path, 'a') as f:
+                        f.write(json.dumps({
+                            "timestamp": int(time.time() * 1000),
+                            "location": "tiktok_selenium_scraper.py:540",
+                            "message": "Post-search button state",
+                            "data": {
+                                "url": post_url,
+                                "total_ads_text": post_total_ads,
+                                "search_clicked": True
+                            },
+                            "sessionId": "debug-session",
+                            "hypothesisId": "A"
+                        }) + '\n')
+                except Exception as log_e:
+                    logger.debug(f"Debug log failed: {log_e}")
+                # #endregion
+                
             except Exception as e:
                 logger.warning(f"Search butonuna tıklanamadı (devam ediliyor): {e}")
                 time.sleep(3)
+                
+                # #region agent log
+                # DEBUG: Search başarısız - buton bulunamadı
+                try:
+                    import json
+                    debug_log_path = '/Users/oguzhantosun/.cursor/debug.log'
+                    with open(debug_log_path, 'a') as f:
+                        f.write(json.dumps({
+                            "timestamp": int(time.time() * 1000),
+                            "location": "tiktok_selenium_scraper.py:555",
+                            "message": "Search button click failed",
+                            "data": {
+                                "error": str(e),
+                                "error_type": type(e).__name__,
+                                "search_clicked": False
+                            },
+                            "sessionId": "debug-session",
+                            "hypothesisId": "A"
+                        }) + '\n')
+                except Exception as log_e:
+                    logger.debug(f"Debug log failed: {log_e}")
+                # #endregion
             
             # Scroll yaparak içeriği yükle
             self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2);")
@@ -594,6 +681,44 @@ class TikTokSeleniumScraper:
             self.driver.execute_script("window.scrollTo(0, 0);")
             time.sleep(2)
             logger.info("Scroll tamamlandı, elementleri arıyorum...")
+            
+            # #region agent log
+            # DEBUG: Scroll sonrası sayfa durumu
+            try:
+                import json
+                debug_log_path = '/Users/oguzhantosun/.cursor/debug.log'
+                page_title = self.driver.title
+                current_url = self.driver.current_url
+                body_text = self.driver.find_element(By.TAG_NAME, "body").text
+                body_text_len = len(body_text)
+                
+                # Total ads değeri
+                total_ads_text = "not_found"
+                try:
+                    total_elem = self.driver.find_element(By.XPATH, "//*[contains(text(), 'Total ads')]")
+                    total_ads_text = total_elem.text
+                except:
+                    pass
+                
+                with open(debug_log_path, 'a') as f:
+                    f.write(json.dumps({
+                        "timestamp": int(time.time() * 1000),
+                        "location": "tiktok_selenium_scraper.py:695",
+                        "message": "Pre-selector page state",
+                        "data": {
+                            "page_title": page_title,
+                            "url": current_url,
+                            "body_text_length": body_text_len,
+                            "total_ads_text": total_ads_text,
+                            "body_contains_qnb": "QNB" in body_text,
+                            "body_contains_ing": "ING" in body_text
+                        },
+                        "sessionId": "debug-session",
+                        "hypothesisId": "B"
+                    }) + '\n')
+            except Exception as log_e:
+                logger.debug(f"Debug log failed: {log_e}")
+            # #endregion
             
             # Öncelikli selector'lar - TikTok'un gerçek reklam kartlarını bul
             selectors = [

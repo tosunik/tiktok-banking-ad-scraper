@@ -83,6 +83,35 @@ class TikTokAdScraper:
                             whitelisted.upper() in advertiser_name 
                             for whitelisted in advertiser_whitelist
                         )
+                        
+                        # #region agent log
+                        # DEBUG: Whitelist matching
+                        try:
+                            import json
+                            debug_log_path = '/Users/oguzhantosun/.cursor/debug.log'
+                            whitelist_upper = [w.upper() for w in advertiser_whitelist]
+                            matches = [w for w in whitelist_upper if w in advertiser_name]
+                            
+                            with open(debug_log_path, 'a') as f:
+                                f.write(json.dumps({
+                                    "timestamp": int(time.time() * 1000),
+                                    "location": "tiktok_scraper.py:88",
+                                    "message": "Whitelist check",
+                                    "data": {
+                                        "advertiser_name": ad.advertiser_name,
+                                        "advertiser_name_upper": advertiser_name,
+                                        "whitelist": advertiser_whitelist,
+                                        "whitelist_upper": whitelist_upper,
+                                        "matches": matches,
+                                        "is_whitelisted": is_whitelisted
+                                    },
+                                    "sessionId": "debug-session",
+                                    "hypothesisId": "C"
+                                }) + '\n')
+                        except Exception as log_e:
+                            pass
+                        # #endregion
+                        
                         if not is_whitelisted:
                             logger.debug(f"Reklam whitelist nedeniyle filtrelendi: {ad.advertiser_name}")
                             filtered_count += 1
