@@ -88,7 +88,7 @@ class TikTokAdScraper:
                         # DEBUG: Whitelist matching
                         try:
                             import json
-                            debug_log_path = '/Users/oguzhantosun/.cursor/debug.log'
+                            debug_log_path = '/app/debug.log'
                             whitelist_upper = [w.upper() for w in advertiser_whitelist]
                             matches = [w for w in whitelist_upper if w in advertiser_name]
                             

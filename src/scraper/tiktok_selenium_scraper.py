@@ -509,7 +509,7 @@ class TikTokSeleniumScraper:
             # DEBUG: Sayfadaki tüm butonları logla
             try:
                 import json
-                debug_log_path = '/Users/oguzhantosun/.cursor/debug.log'
+                debug_log_path = '/app/debug.log'
                 current_url = self.driver.current_url
                 all_buttons = self.driver.find_elements(By.TAG_NAME, "button")
                 button_texts = [btn.text for btn in all_buttons[:10]]  # İlk 10 buton
@@ -558,7 +558,7 @@ class TikTokSeleniumScraper:
                 # DEBUG: Search'ten sonra durum
                 try:
                     import json
-                    debug_log_path = '/Users/oguzhantosun/.cursor/debug.log'
+                    debug_log_path = '/app/debug.log'
                     post_url = self.driver.current_url
                     post_total_ads = "not_found"
                     try:
@@ -592,7 +592,7 @@ class TikTokSeleniumScraper:
                 # DEBUG: Search başarısız - buton bulunamadı
                 try:
                     import json
-                    debug_log_path = '/Users/oguzhantosun/.cursor/debug.log'
+                    debug_log_path = '/app/debug.log'
                     with open(debug_log_path, 'a') as f:
                         f.write(json.dumps({
                             "timestamp": int(time.time() * 1000),
@@ -686,7 +686,7 @@ class TikTokSeleniumScraper:
             # DEBUG: Scroll sonrası sayfa durumu
             try:
                 import json
-                debug_log_path = '/Users/oguzhantosun/.cursor/debug.log'
+                debug_log_path = '/app/debug.log'
                 page_title = self.driver.title
                 current_url = self.driver.current_url
                 body_text = self.driver.find_element(By.TAG_NAME, "body").text
