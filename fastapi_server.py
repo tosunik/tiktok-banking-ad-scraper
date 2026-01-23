@@ -167,28 +167,33 @@ async def scrape_tiktok_ads(request: ScrapeRequest):
                 name_upper = advertiser_name.upper()
                 
                 # Banka isimleri mapping (uzun → kısa)
-                # Birden fazla varyasyon ekledik (TikTok'ta farklı şekillerde yazılabilir)
+                # SPESİFİK keyword'ler - generic "yapi" gibi kelimeler YOK
                 bank_mapping = {
-                    "GARANTI": "garanti",
-                    "GARANTI BBVA": "garanti",
-                    "GARANTI BANKASI": "garanti",
+                    # Garanti
+                    "GARANTI": "garanti bankasi",
+                    "GARANTI BBVA": "garanti bankasi",
+                    "GARANTI BANKASI": "garanti bankasi",
+                    # Akbank
                     "AKBANK": "akbank",
                     "AKBANK T.A.S": "akbank",
-                    "YAPI VE KREDI": "yapikredi",
-                    "YAPI KREDI": "yapikredi",
-                    "YAPIKREDI": "yapikredi",
-                    "YAPI": "yapikredi",  # Fallback
-                    "KREDI BANKASI": "yapikredi",
-                    "IS BANKASI": "isbank",
-                    "ISBANK": "isbank",
-                    "TURKIYE IS BANKASI": "isbank",
-                    "QNB": "qnb",
-                    "QNB FINANSBANK": "qnb",
-                    "ING": "ing",
-                    "ING BANK": "ing",
+                    "AKBANK TURK": "akbank",
+                    # Yapı Kredi - SPESİFİK keywords (generic "yapi" YOK!)
+                    "YAPI VE KREDI": "yapi kredi bankasi",
+                    "YAPI KREDI": "yapi kredi bankasi",
+                    "YAPIKREDI": "yapi kredi bankasi",
+                    "KREDI BANKASI": "yapi kredi bankasi",
+                    # İş Bankası
+                    "IS BANKASI": "is bankasi",
+                    "ISBANK": "is bankasi",
+                    "TURKIYE IS BANKASI": "is bankasi",
+                    # Diğer bankalar
+                    "QNB": "qnb finansbank",
+                    "QNB FINANSBANK": "qnb finansbank",
+                    "ING": "ing bank",
+                    "ING BANK": "ing bank",
                     "DENIZBANK": "denizbank",
-                    "ZIRAAT": "ziraat",
-                    "ZIRAAT BANKASI": "ziraat",
+                    "ZIRAAT": "ziraat bankasi",
+                    "ZIRAAT BANKASI": "ziraat bankasi",
                     "HALKBANK": "halkbank",
                     "VAKIFBANK": "vakifbank",
                     "VAKIF": "vakifbank"

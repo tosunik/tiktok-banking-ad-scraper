@@ -1386,10 +1386,12 @@ class TikTokSeleniumScraper:
                             if url_match:
                                 media_url = url_match.group(1).strip()
                                 # Placeholder SVG'leri ve base64'leri filtrele
+                                # TikTok CDN: ibyteimg.com VE tiktokcdn.com (her ikisi de TikTok'a ait)
+                                is_tiktok_cdn = 'ibyteimg.com' in media_url or 'tiktokcdn.com' in media_url
                                 if (media_url and 
                                     media_url != 'none' and 
                                     not media_url.startswith('data:image/svg+xml') and
-                                    'ibyteimg.com' in media_url):  # TikTok CDN kontrolü
+                                    is_tiktok_cdn):
                                     
                                     data['media_urls'].append(media_url)
                                     
