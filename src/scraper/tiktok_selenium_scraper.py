@@ -610,11 +610,27 @@ class TikTokSeleniumScraper:
                     logger.debug(f"Debug log failed: {log_e}")
                 # #endregion
             
-            # Scroll yaparak içeriği yükle
+            # MULTI-SCROLL: Daha fazla reklam yüklemek için birden fazla scroll
+            logger.info(f"Daha fazla reklam yüklemek için scroll yapılıyor (hedef: {max_ads_per_search})...")
+            
+            # 1. Scroll (ilk batch)
+            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight/3);")
+            time.sleep(2)
+            
+            # 2. Scroll (orta batch)
             self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2);")
             time.sleep(2)
+            
+            # 3. Scroll (son batch)
             self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             time.sleep(3)
+            
+            # 4. Extra scroll (daha fazla reklam için - max_ads_per_search > 20 ise)
+            if max_ads_per_search > 20:
+                logger.info("Ekstra scroll yapılıyor (max_ads_per_search > 20)...")
+                for i in range(2):
+                    self.driver.execute_script("window.scrollBy(0, 1000);")
+                    time.sleep(2)
             
             # DEBUG: Screenshot + Network logs kaydet
             try:
@@ -640,6 +656,26 @@ class TikTokSeleniumScraper:
                 return []
             
             logger.info(f"{len(ad_elements)} reklam elementi bulundu")
+            
+            # #region agent log
+            try:
+                import json
+                with open('/Users/oguzhantosun/.cursor/debug.log', 'a') as f:
+                    f.write(json.dumps({
+                        "timestamp": int(time.time() * 1000),
+                        "location": "tiktok_selenium_scraper.py:660",
+                        "message": "Ad elements found before extraction",
+                        "data": {
+                            "total_elements_found": len(ad_elements),
+                            "max_ads_per_search": max_ads_per_search,
+                            "will_extract": min(len(ad_elements), max_ads_per_search)
+                        },
+                        "sessionId": "debug-session",
+                        "runId": "test",
+                        "hypothesisId": "H6"
+                    }) + '\n')
+            except: pass
+            # #endregion
             
             # Her reklam için detay çıkar
             for i, ad_element in enumerate(ad_elements[:max_ads_per_search]):
