@@ -56,7 +56,7 @@ app.add_middleware(
 )
 
 class ScrapeRequest(BaseModel):
-    keywords: List[str] = Field(default=["kredi", "garanti", "akbank", "dijital", "hesap", "kart", "maaş"])
+    keywords: List[str] = Field(default=[])
     max_results: int = Field(default=50, ge=1, le=200)
     region: str = Field(default="TR")
     days_back: int = Field(default=7, ge=1, le=30)
