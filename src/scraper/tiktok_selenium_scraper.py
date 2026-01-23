@@ -21,26 +21,35 @@ from loguru import logger
 
 from src.config.settings import settings
 from src.utils.helpers import safe_sleep, clean_text
-def check_url_content_type(url: str, timeout: int = 5) -> str:
+def check_url_content_type(url: str, timeout: int = 2) -> str:
     """
     URL'nin Content-Type'ını HEAD request ile kontrol et
     Returns: 'video', 'image', or 'unknown'
+    
+    NOT: Defensive coding - hata durumunda 'unknown' döner
     """
     try:
+        # Kısa timeout (2s) - TikTok CDN bazen yavaş yanıt verir
         response = requests.head(url, timeout=timeout, allow_redirects=True)
         content_type = response.headers.get('Content-Type', '').lower()
         
-        if 'video' in content_type:
-            logger.info(f"✅ Content-Type kontrolü: VIDEO ({content_type})")
+        if 'video' in content_type or 'mp4' in content_type:
+            logger.info(f"✅ Content-Type: VIDEO ({content_type})")
             return 'video'
-        elif 'image' in content_type:
-            logger.info(f"⚠️ Content-Type kontrolü: IMAGE ({content_type})")
+        elif 'image' in content_type or 'jpeg' in content_type or 'png' in content_type:
+            logger.info(f"⚠️ Content-Type: IMAGE ({content_type})")
             return 'image'
         else:
             logger.debug(f"❓ Content-Type belirsiz: {content_type}")
             return 'unknown'
+    except requests.exceptions.Timeout:
+        logger.warning(f"⏱️ Content-Type kontrolü timeout: {url[:80]}...")
+        return 'unknown'
+    except requests.exceptions.ConnectionError as e:
+        logger.warning(f"🔌 Content-Type kontrolü connection error: {str(e)[:100]}")
+        return 'unknown'
     except Exception as e:
-        logger.debug(f"Content-Type kontrolü başarısız: {e}")
+        logger.warning(f"❌ Content-Type kontrolü başarısız: {str(e)[:100]}")
         return 'unknown'
 
 
@@ -1382,25 +1391,32 @@ class TikTokSeleniumScraper:
                                     not media_url.startswith('data:image/svg+xml') and
                                     'ibyteimg.com' in media_url):  # TikTok CDN kontrolü
                                     
-                                    # Content-Type kontrolü yap (gerçek media type'ı bul)
-                                    actual_type = check_url_content_type(media_url, timeout=3)
-                                    
                                     data['media_urls'].append(media_url)
                                     
-                                    # Gerçek Content-Type'a göre media_type belirle
-                                    if actual_type == 'video':
+                                    # STRATEJI: .video_player → %95 video thumbnail'ıdır
+                                    # Content-Type kontrolü OPSIYONEL (hata olursa class'a güven)
+                                    try:
+                                        actual_type = check_url_content_type(media_url, timeout=2)
+                                        
+                                        if actual_type == 'video':
+                                            data['media_type'] = 'video'
+                                            data['video_found'] = True
+                                            logger.info(f"✅ VIDEO (Content-Type confirmed): {media_url[:80]}...")
+                                        elif actual_type == 'image':
+                                            # Nadiren: .video_player'dan image (static ad)
+                                            data['media_type'] = 'image'
+                                            logger.warning(f"⚠️ IMAGE from .video_player (static ad): {media_url[:80]}...")
+                                        else:
+                                            # Content-Type belirsiz → .video_player class'ına güven
+                                            data['media_type'] = 'video'
+                                            data['video_found'] = True
+                                            logger.info(f"✅ VIDEO (from .video_player class, CT unknown): {media_url[:80]}...")
+                                    except Exception as ct_error:
+                                        # Content-Type kontrolü tamamen başarısız
+                                        # FALLBACK: .video_player class'ı varsa → video
                                         data['media_type'] = 'video'
                                         data['video_found'] = True
-                                        logger.info(f"✅ VIDEO (confirmed by Content-Type): {media_url[:80]}...")
-                                    elif actual_type == 'image':
-                                        # .video_player'dan geldi ama aslında image (thumbnail)
-                                        data['media_type'] = 'image'
-                                        logger.warning(f"⚠️ .video_player'dan IMAGE bulundu (thumbnail): {media_url[:80]}...")
-                                    else:
-                                        # Content-Type belirsiz - .video_player class'ına güven
-                                        data['media_type'] = 'video'
-                                        data['video_found'] = True
-                                        logger.info(f"✅ VIDEO (assumed from .video_player class): {media_url[:80]}...")
+                                        logger.warning(f"⚠️ Content-Type check failed, assuming VIDEO from .video_player: {str(ct_error)[:50]}")
                                     
                                     break  # İlk media yeterli
                     
