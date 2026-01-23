@@ -161,25 +161,61 @@ async def scrape_tiktok_ads(request: ScrapeRequest):
         # SMART KEYWORD FALLBACK: Eğer keyword yok ama whitelist varsa, whitelist'i keyword yap
         keywords_to_use = request.keywords
         if (not keywords_to_use or len(keywords_to_use) == 0) and request.advertiser_whitelist:
-            # Whitelist'teki isimleri keyword'e dönüştür (lowercase)
-            keywords_to_use = [name.lower() for name in request.advertiser_whitelist]
-            logger.info(f"⚡ SMART FALLBACK: keywords boş, whitelist keyword'e dönüştürüldü: {keywords_to_use}")
+            # Whitelist'teki uzun isimleri kısa keyword'lere map et
+            def extract_bank_keyword(advertiser_name: str) -> str:
+                """Uzun advertiser name'den kısa keyword çıkar"""
+                name_upper = advertiser_name.upper()
+                
+                # Banka isimleri mapping (uzun → kısa)
+                bank_mapping = {
+                    "GARANTI": "garanti",
+                    "AKBANK": "akbank",
+                    "YAPI VE KREDI": "yapikredi",
+                    "YAPIKREDI": "yapikredi",
+                    "IS BANKASI": "isbank",
+                    "ISBANK": "isbank",
+                    "QNB": "qnb",
+                    "ING": "ing",
+                    "DENIZBANK": "denizbank",
+                    "ZIRAAT": "ziraat",
+                    "HALKBANK": "halkbank",
+                    "VAKIFBANK": "vakifbank"
+                }
+                
+                # Mapping'de ara
+                for key, short_name in bank_mapping.items():
+                    if key in name_upper:
+                        return short_name
+                
+                # Mapping bulunamazsa ilk anlamlı kelimeyi al
+                words = advertiser_name.lower().split()
+                # "turkiye", "anonim", "sirketi" gibi genel kelimeleri atla
+                skip_words = {"turkiye", "anonim", "sirketi", "turk", "limited", "inc", "bank"}
+                for word in words:
+                    if word not in skip_words and len(word) > 3:
+                        return word
+                
+                # Hiçbiri yoksa lowercase yap
+                return advertiser_name.lower()
+            
+            keywords_to_use = [extract_bank_keyword(name) for name in request.advertiser_whitelist]
+            logger.info(f"⚡ SMART KEYWORD MAPPING: {request.advertiser_whitelist} → {keywords_to_use}")
             
             # #region agent log
             try:
                 with open('/Users/oguzhantosun/.cursor/debug.log', 'a') as f:
                     f.write(json_log.dumps({
                         "timestamp": int(time.time() * 1000),
-                        "location": "fastapi_server.py:162",
-                        "message": "Smart fallback activated",
+                        "location": "fastapi_server.py:199",
+                        "message": "Smart keyword mapping activated",
                         "data": {
-                            "original_keywords": request.keywords,
-                            "new_keywords": keywords_to_use,
-                            "whitelist": request.advertiser_whitelist
+                            "original_whitelist": request.advertiser_whitelist,
+                            "mapped_keywords": keywords_to_use,
+                            "mapping": dict(zip(request.advertiser_whitelist, keywords_to_use))
                         },
                         "sessionId": "debug-session",
                         "runId": "test",
-                        "hypothesisId": "H2"
+                        "hypothesisId": "H4"
                     }) + '\n')
             except: pass
             # #endregion
