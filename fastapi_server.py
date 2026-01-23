@@ -167,19 +167,31 @@ async def scrape_tiktok_ads(request: ScrapeRequest):
                 name_upper = advertiser_name.upper()
                 
                 # Banka isimleri mapping (uzun → kısa)
+                # Birden fazla varyasyon ekledik (TikTok'ta farklı şekillerde yazılabilir)
                 bank_mapping = {
                     "GARANTI": "garanti",
+                    "GARANTI BBVA": "garanti",
+                    "GARANTI BANKASI": "garanti",
                     "AKBANK": "akbank",
+                    "AKBANK T.A.S": "akbank",
                     "YAPI VE KREDI": "yapikredi",
+                    "YAPI KREDI": "yapikredi",
                     "YAPIKREDI": "yapikredi",
+                    "YAPI": "yapikredi",  # Fallback
+                    "KREDI BANKASI": "yapikredi",
                     "IS BANKASI": "isbank",
                     "ISBANK": "isbank",
+                    "TURKIYE IS BANKASI": "isbank",
                     "QNB": "qnb",
+                    "QNB FINANSBANK": "qnb",
                     "ING": "ing",
+                    "ING BANK": "ing",
                     "DENIZBANK": "denizbank",
                     "ZIRAAT": "ziraat",
+                    "ZIRAAT BANKASI": "ziraat",
                     "HALKBANK": "halkbank",
-                    "VAKIFBANK": "vakifbank"
+                    "VAKIFBANK": "vakifbank",
+                    "VAKIF": "vakifbank"
                 }
                 
                 # Mapping'de ara

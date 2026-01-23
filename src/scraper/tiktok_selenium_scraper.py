@@ -951,7 +951,7 @@ class TikTokSeleniumScraper:
         try:
             # #region agent log
             try:
-                with open("/Users/oguzhantosun/.cursor/debug.log", "a", encoding="utf-8") as f:
+                with open("/app/debug.log", "a", encoding="utf-8") as f:
                     f.write(json.dumps({
                         "sessionId": "debug-session",
                         "runId": "video-debug-1",
@@ -977,7 +977,7 @@ class TikTokSeleniumScraper:
 
             # #region agent log
             try:
-                with open("/Users/oguzhantosun/.cursor/debug.log", "a", encoding="utf-8") as f:
+                with open("/app/debug.log", "a", encoding="utf-8") as f:
                     f.write(json.dumps({
                         "sessionId": "debug-session",
                         "runId": "video-debug-1",
@@ -1026,35 +1026,48 @@ class TikTokSeleniumScraper:
         data = {}
         
         try:
-            # Advertiser name - .ad_info_name class'ı kullan
+            # Advertiser name - SPESİFİK selector kullan: .ad_info_text
             try:
-                advertiser_elem = element.find_element(By.CSS_SELECTOR, '.ad_info_name')
-                advertiser_text = clean_text(advertiser_elem.text)
-                # "Ad" kelimesini kaldır (başta, sonda veya ayrı satırda olabilir)
-                lines = advertiser_text.split('\n')
-                # "Ad" satırını atla, diğer satırları birleştir
-                filtered_lines = [line.strip() for line in lines if line.strip().lower() != 'ad' and len(line.strip()) > 2]
-                if filtered_lines:
-                    advertiser_text = ' '.join(filtered_lines).strip()
-                else:
-                    # Eğer tek satırsa, "Ad " ile başlıyorsa kaldır
-                    advertiser_text = advertiser_text.replace('Ad ', '').replace('Ad ', '').strip()
-                    # Başta veya sonda "Ad" kelimesi varsa kaldır
-                    if advertiser_text.lower().startswith('ad '):
-                        advertiser_text = advertiser_text[3:].strip()
-                    if advertiser_text.lower().endswith(' ad'):
-                        advertiser_text = advertiser_text[:-3].strip()
-                
-                # Son bir temizleme: Başta "Ad " varsa kaldır (case-insensitive)
-                if advertiser_text:
-                    # Regex ile başta "Ad " veya "ad " kaldır
-                    advertiser_text = re.sub(r'^[Aa][Dd]\s+', '', advertiser_text).strip()
+                # İlk önce en spesifik selector'ı dene (.ad_info_text)
+                advertiser_elem = element.find_element(By.CSS_SELECTOR, '.ad_info_text')
+                advertiser_text = clean_text(advertiser_elem.text).strip()
                 
                 if advertiser_text and len(advertiser_text) > 2:
                     data['advertiser_name'] = advertiser_text
+                    logger.debug(f"✓ Advertiser name bulundu (.ad_info_text): {advertiser_text}")
                 else:
                     data['advertiser_name'] = 'Unknown'
             except:
+                # Fallback: .ad_info_name kullan ve "Ad" badge'ini temizle
+                try:
+                    advertiser_elem = element.find_element(By.CSS_SELECTOR, '.ad_info_name')
+                    advertiser_text = clean_text(advertiser_elem.text)
+                    # "Ad" kelimesini kaldır (başta, sonda veya ayrı satırda olabilir)
+                    lines = advertiser_text.split('\n')
+                    # "Ad" satırını atla, diğer satırları birleştir
+                    filtered_lines = [line.strip() for line in lines if line.strip().lower() != 'ad' and len(line.strip()) > 2]
+                    if filtered_lines:
+                        advertiser_text = ' '.join(filtered_lines).strip()
+                    else:
+                        # Eğer tek satırsa, "Ad " ile başlıyorsa kaldır
+                        advertiser_text = advertiser_text.replace('Ad ', '').replace('Ad ', '').strip()
+                        # Başta veya sonda "Ad" kelimesi varsa kaldır
+                        if advertiser_text.lower().startswith('ad '):
+                            advertiser_text = advertiser_text[3:].strip()
+                        if advertiser_text.lower().endswith(' ad'):
+                            advertiser_text = advertiser_text[:-3].strip()
+                    
+                    # Son bir temizleme: Başta "Ad " varsa kaldır (case-insensitive)
+                    if advertiser_text:
+                        # Regex ile başta "Ad " veya "ad " kaldır
+                        advertiser_text = re.sub(r'^[Aa][Dd]\s+', '', advertiser_text).strip()
+                    
+                    if advertiser_text and len(advertiser_text) > 2:
+                        data['advertiser_name'] = advertiser_text
+                        logger.debug(f"✓ Advertiser name bulundu (.ad_info_name fallback): {advertiser_text}")
+                    else:
+                        data['advertiser_name'] = 'Unknown'
+                except:
                 # Fallback: Text içinden bul
                 try:
                     full_text = element.text
@@ -1170,7 +1183,7 @@ class TikTokSeleniumScraper:
 
             # #region agent log
             try:
-                with open("/Users/oguzhantosun/.cursor/debug.log", "a", encoding="utf-8") as f:
+                with open("/app/debug.log", "a", encoding="utf-8") as f:
                     f.write(json.dumps({
                         "sessionId": "debug-session",
                         "runId": "video-debug-1",
@@ -1250,7 +1263,7 @@ class TikTokSeleniumScraper:
                             data['video_found'] = True
                             # #region agent log
                             try:
-                                with open("/Users/oguzhantosun/.cursor/debug.log", "a", encoding="utf-8") as f:
+                                with open("/app/debug.log", "a", encoding="utf-8") as f:
                                     f.write(json.dumps({
                                         "sessionId": "debug-session",
                                         "runId": "video-debug-1",
@@ -1302,7 +1315,7 @@ class TikTokSeleniumScraper:
                                     try:
                                         looks_like_video = ('video' in src.lower() or '.mp4' in src.lower())
                                         looks_like_thumb = bool(re.search(r'(thumb|poster|preview|cover|ibyteimg)', src, re.IGNORECASE))
-                                        with open("/Users/oguzhantosun/.cursor/debug.log", "a", encoding="utf-8") as f:
+                                        with open("/app/debug.log", "a", encoding="utf-8") as f:
                                             f.write(json.dumps({
                                                 "sessionId": "debug-session",
                                                 "runId": "video-debug-1",
@@ -1329,17 +1342,36 @@ class TikTokSeleniumScraper:
             # Background image extraction (fallback)
             if not data['media_urls']:
                 try:
-                    # Tüm elementlerde background-image ara
-                    all_elements = element.find_elements(By.CSS_SELECTOR, '*')
-                    for elem in all_elements:
-                        style = elem.get_attribute('style')
+                    # İlk önce .video_player class'ını dene (en yaygın)
+                    video_players = element.find_elements(By.CSS_SELECTOR, '.video_player')
+                    for video_player in video_players:
+                        style = video_player.get_attribute('style')
                         if style and 'background-image' in style:
+                            # URL'i çıkar (HTML entities decoded olmalı)
                             url_match = re.search(r'background-image:\s*url\(["\']?(.*?)["\']?\)', style)
                             if url_match:
-                                media_url = url_match.group(1)
-                                # Placeholder SVG'leri filtrele
-                                if media_url and media_url != 'none' and not media_url.startswith('data:image/svg+xml'):
+                                media_url = url_match.group(1).strip()
+                                # Placeholder SVG'leri ve base64'leri filtrele
+                                if (media_url and 
+                                    media_url != 'none' and 
+                                    not media_url.startswith('data:image/svg+xml') and
+                                    'ibyteimg.com' in media_url):  # TikTok CDN kontrolü
                                     data['media_urls'].append(media_url)
+                                    logger.info(f"✅ Background image URL bulundu (.video_player): {media_url[:80]}...")
+                    
+                    # Fallback: Tüm elementlerde background-image ara
+                    if not data['media_urls']:
+                        all_elements = element.find_elements(By.CSS_SELECTOR, '*')
+                        for elem in all_elements:
+                            style = elem.get_attribute('style')
+                            if style and 'background-image' in style:
+                                url_match = re.search(r'background-image:\s*url\(["\']?(.*?)["\']?\)', style)
+                                if url_match:
+                                    media_url = url_match.group(1).strip()
+                                    # Placeholder SVG'leri filtrele
+                                    if media_url and media_url != 'none' and not media_url.startswith('data:image/svg+xml'):
+                                        data['media_urls'].append(media_url)
+                                        logger.info(f"✅ Background image URL bulundu (fallback): {media_url[:80]}...")
                                     data['media_type'] = 'image'
                                     logger.info(f"✅ Background image URL bulundu: {media_url[:100]}...")
                                     break
