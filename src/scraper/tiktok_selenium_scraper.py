@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 import time
 import json
 import re
+import requests
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from pathlib import Path
@@ -20,6 +21,29 @@ from loguru import logger
 
 from src.config.settings import settings
 from src.utils.helpers import safe_sleep, clean_text
+def check_url_content_type(url: str, timeout: int = 5) -> str:
+    """
+    URL'nin Content-Type'ını HEAD request ile kontrol et
+    Returns: 'video', 'image', or 'unknown'
+    """
+    try:
+        response = requests.head(url, timeout=timeout, allow_redirects=True)
+        content_type = response.headers.get('Content-Type', '').lower()
+        
+        if 'video' in content_type:
+            logger.info(f"✅ Content-Type kontrolü: VIDEO ({content_type})")
+            return 'video'
+        elif 'image' in content_type:
+            logger.info(f"⚠️ Content-Type kontrolü: IMAGE ({content_type})")
+            return 'image'
+        else:
+            logger.debug(f"❓ Content-Type belirsiz: {content_type}")
+            return 'unknown'
+    except Exception as e:
+        logger.debug(f"Content-Type kontrolü başarısız: {e}")
+        return 'unknown'
+
+
 class NetworkVideoExtractor:
     """Network requests'lerden video URL'lerini yakalama"""
     
@@ -1068,36 +1092,36 @@ class TikTokSeleniumScraper:
                     else:
                         data['advertiser_name'] = 'Unknown'
                 except:
-                # Fallback: Text içinden bul
-                try:
-                    full_text = element.text
-                    lines = [line.strip() for line in full_text.split('\n') if line.strip()]
-                    # "Ad" kelimesinden sonraki satır genelde advertiser name
-                    for i, line in enumerate(lines):
-                        if line.lower() == 'ad' and i + 1 < len(lines):
-                            next_line = lines[i + 1].strip()
-                            if len(next_line) > 2 and len(next_line) < 200:
-                                advertiser_name = clean_text(next_line)
-                                # "Ad " ile başlıyorsa kaldır
-                                if advertiser_name.lower().startswith('ad '):
-                                    advertiser_name = advertiser_name[3:].strip()
-                                data['advertiser_name'] = advertiser_name
-                                break
-                    # Eğer bulunamadıysa, ilk anlamlı satırı al ve "Ad " ile başlıyorsa temizle
-                    if not data.get('advertiser_name'):
-                        for line in lines:
-                            if len(line) > 5:  # Anlamlı bir satır
-                                advertiser_name = clean_text(line)
-                                # "Ad " ile başlıyorsa kaldır
-                                if advertiser_name.lower().startswith('ad '):
-                                    advertiser_name = advertiser_name[3:].strip()
-                                if len(advertiser_name) > 2:
+                    # Fallback: Text içinden bul
+                    try:
+                        full_text = element.text
+                        lines = [line.strip() for line in full_text.split('\n') if line.strip()]
+                        # "Ad" kelimesinden sonraki satır genelde advertiser name
+                        for i, line in enumerate(lines):
+                            if line.lower() == 'ad' and i + 1 < len(lines):
+                                next_line = lines[i + 1].strip()
+                                if len(next_line) > 2 and len(next_line) < 200:
+                                    advertiser_name = clean_text(next_line)
+                                    # "Ad " ile başlıyorsa kaldır
+                                    if advertiser_name.lower().startswith('ad '):
+                                        advertiser_name = advertiser_name[3:].strip()
                                     data['advertiser_name'] = advertiser_name
                                     break
-                    if not data.get('advertiser_name'):
+                        # Eğer bulunamadıysa, ilk anlamlı satırı al ve "Ad " ile başlıyorsa temizle
+                        if not data.get('advertiser_name'):
+                            for line in lines:
+                                if len(line) > 5:  # Anlamlı bir satır
+                                    advertiser_name = clean_text(line)
+                                    # "Ad " ile başlıyorsa kaldır
+                                    if advertiser_name.lower().startswith('ad '):
+                                        advertiser_name = advertiser_name[3:].strip()
+                                    if len(advertiser_name) > 2:
+                                        data['advertiser_name'] = advertiser_name
+                                        break
+                        if not data.get('advertiser_name'):
+                            data['advertiser_name'] = 'Unknown'
+                    except:
                         data['advertiser_name'] = 'Unknown'
-                except:
-                    data['advertiser_name'] = 'Unknown'
             
             # Ad details - tarih ve reach bilgileri (text içinde)
             try:
@@ -1343,6 +1367,7 @@ class TikTokSeleniumScraper:
             if not data['media_urls']:
                 try:
                     # İlk önce .video_player class'ını dene (en yaygın)
+                    # ÖNEMLİ: .video_player TikTok'ta VIDEO thumbnail'ı için kullanılır!
                     video_players = element.find_elements(By.CSS_SELECTOR, '.video_player')
                     for video_player in video_players:
                         style = video_player.get_attribute('style')
@@ -1356,10 +1381,30 @@ class TikTokSeleniumScraper:
                                     media_url != 'none' and 
                                     not media_url.startswith('data:image/svg+xml') and
                                     'ibyteimg.com' in media_url):  # TikTok CDN kontrolü
+                                    
+                                    # Content-Type kontrolü yap (gerçek media type'ı bul)
+                                    actual_type = check_url_content_type(media_url, timeout=3)
+                                    
                                     data['media_urls'].append(media_url)
-                                    logger.info(f"✅ Background image URL bulundu (.video_player): {media_url[:80]}...")
+                                    
+                                    # Gerçek Content-Type'a göre media_type belirle
+                                    if actual_type == 'video':
+                                        data['media_type'] = 'video'
+                                        data['video_found'] = True
+                                        logger.info(f"✅ VIDEO (confirmed by Content-Type): {media_url[:80]}...")
+                                    elif actual_type == 'image':
+                                        # .video_player'dan geldi ama aslında image (thumbnail)
+                                        data['media_type'] = 'image'
+                                        logger.warning(f"⚠️ .video_player'dan IMAGE bulundu (thumbnail): {media_url[:80]}...")
+                                    else:
+                                        # Content-Type belirsiz - .video_player class'ına güven
+                                        data['media_type'] = 'video'
+                                        data['video_found'] = True
+                                        logger.info(f"✅ VIDEO (assumed from .video_player class): {media_url[:80]}...")
+                                    
+                                    break  # İlk media yeterli
                     
-                    # Fallback: Tüm elementlerde background-image ara
+                    # Fallback: Tüm elementlerde background-image ara (bu sefer IMAGE olarak)
                     if not data['media_urls']:
                         all_elements = element.find_elements(By.CSS_SELECTOR, '*')
                         for elem in all_elements:
@@ -1371,10 +1416,10 @@ class TikTokSeleniumScraper:
                                     # Placeholder SVG'leri filtrele
                                     if media_url and media_url != 'none' and not media_url.startswith('data:image/svg+xml'):
                                         data['media_urls'].append(media_url)
-                                        logger.info(f"✅ Background image URL bulundu (fallback): {media_url[:80]}...")
-                                    data['media_type'] = 'image'
-                                    logger.info(f"✅ Background image URL bulundu: {media_url[:100]}...")
-                                    break
+                                        # Generic background-image → muhtemelen gerçek bir IMAGE
+                                        data['media_type'] = 'image'
+                                        logger.info(f"✅ Background image URL bulundu (image): {media_url[:80]}...")
+                                        break
                 except:
                     pass
                     
