@@ -135,7 +135,55 @@ async def scrape_tiktok_ads(request: ScrapeRequest):
     """
     logger.info(f"N8N scraping request: keywords={request.keywords}, max={request.max_results}")
     
+    # #region agent log
+    import time
+    import json as json_log
     try:
+        with open('/Users/oguzhantosun/.cursor/debug.log', 'a') as f:
+            f.write(json_log.dumps({
+                "timestamp": int(time.time() * 1000),
+                "location": "fastapi_server.py:136",
+                "message": "Request received",
+                "data": {
+                    "keywords": request.keywords,
+                    "keywords_empty": len(request.keywords) == 0,
+                    "advertiser_whitelist": request.advertiser_whitelist,
+                    "has_whitelist": request.advertiser_whitelist is not None
+                },
+                "sessionId": "debug-session",
+                "runId": "test",
+                "hypothesisId": "H1"
+            }) + '\n')
+    except: pass
+    # #endregion
+    
+    try:
+        # SMART KEYWORD FALLBACK: Eğer keyword yok ama whitelist varsa, whitelist'i keyword yap
+        keywords_to_use = request.keywords
+        if (not keywords_to_use or len(keywords_to_use) == 0) and request.advertiser_whitelist:
+            # Whitelist'teki isimleri keyword'e dönüştür (lowercase)
+            keywords_to_use = [name.lower() for name in request.advertiser_whitelist]
+            logger.info(f"⚡ SMART FALLBACK: keywords boş, whitelist keyword'e dönüştürüldü: {keywords_to_use}")
+            
+            # #region agent log
+            try:
+                with open('/Users/oguzhantosun/.cursor/debug.log', 'a') as f:
+                    f.write(json_log.dumps({
+                        "timestamp": int(time.time() * 1000),
+                        "location": "fastapi_server.py:162",
+                        "message": "Smart fallback activated",
+                        "data": {
+                            "original_keywords": request.keywords,
+                            "new_keywords": keywords_to_use,
+                            "whitelist": request.advertiser_whitelist
+                        },
+                        "sessionId": "debug-session",
+                        "runId": "test",
+                        "hypothesisId": "H2"
+                    }) + '\n')
+            except: pass
+            # #endregion
+        
         # Initialize scraper
         scraper = TikTokAdScraper(headless=request.headless)
         
@@ -147,12 +195,31 @@ async def scrape_tiktok_ads(request: ScrapeRequest):
             logger.info(f"Advertiser whitelist: {request.advertiser_whitelist}")
         
         result = scraper.search_ads(
-            keywords=request.keywords,
+            keywords=keywords_to_use,
             max_results=request.max_results,
             search_type=request.search_type,
             advertiser_blacklist=request.advertiser_blacklist,
             advertiser_whitelist=request.advertiser_whitelist
         )
+        
+        # #region agent log
+        try:
+            with open('/Users/oguzhantosun/.cursor/debug.log', 'a') as f:
+                f.write(json_log.dumps({
+                    "timestamp": int(time.time() * 1000),
+                    "location": "fastapi_server.py:210",
+                    "message": "Scraping completed",
+                    "data": {
+                        "keywords_used": keywords_to_use,
+                        "total_ads": result.total_ads,
+                        "banking_ads": result.banking_ads
+                    },
+                    "sessionId": "debug-session",
+                    "runId": "test",
+                    "hypothesisId": "H3"
+                }) + '\n')
+        except: pass
+        # #endregion
         
         # Convert to N8N format - RETURN ARRAY FOR N8N
         n8n_ads = []
