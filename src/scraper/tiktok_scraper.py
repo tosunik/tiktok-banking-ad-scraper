@@ -19,6 +19,7 @@ class TikTokAdScraper:
     def __init__(self, headless: bool = True):
         self.selenium_scraper = TikTokSeleniumScraper(headless=headless)
         self.scraped_ads = []
+        self.seen_ad_hashes = set()  # Duplicate detection için
         
     def search_ads(self, 
                    keywords: List[str], 
@@ -117,6 +118,37 @@ class TikTokAdScraper:
                             filtered_count += 1
                             continue
                     
+                    # DUPLICATE CHECK: Aynı içerikli reklamları engelle
+                    ad_hash = self._compute_ad_hash(ad)
+                    if ad_hash in self.seen_ad_hashes:
+                        logger.debug(f"Reklam duplicate nedeniyle atlandı: {ad.advertiser_name}")
+                        filtered_count += 1
+                        
+                        # #region agent log
+                        try:
+                            import json
+                            with open('/Users/oguzhantosun/.cursor/debug.log', 'a') as f:
+                                f.write(json.dumps({
+                                    "timestamp": int(time.time() * 1000),
+                                    "location": "tiktok_scraper.py:122",
+                                    "message": "Duplicate ad detected",
+                                    "data": {
+                                        "advertiser": ad.advertiser_name,
+                                        "ad_text_preview": (ad.ad_text or "")[:50],
+                                        "ad_hash": ad_hash
+                                    },
+                                    "sessionId": "debug-session",
+                                    "runId": "test",
+                                    "hypothesisId": "H5"
+                                }) + '\n')
+                        except: pass
+                        # #endregion
+                        
+                        continue
+                    
+                    # Hash'i kaydet
+                    self.seen_ad_hashes.add(ad_hash)
+                    
                     # Filtrelerden geçti, ekle
                     self.scraped_ads.append(ad)
                     result.total_ads += 1
@@ -146,6 +178,19 @@ class TikTokAdScraper:
         
         result.complete()
         return result
+    
+    def _compute_ad_hash(self, ad: 'TikTokAd') -> str:
+        """Reklam içeriğinden unique hash oluştur (duplicate detection için)"""
+        import hashlib
+        
+        # Hash için kullanılacak alanlar
+        advertiser = (ad.advertiser_name or "").strip().lower()
+        text = (ad.ad_text or "").strip().lower()
+        media = tuple(sorted(ad.media_urls)) if ad.media_urls else ()
+        
+        # Birleştir ve hash'le
+        content = f"{advertiser}|{text}|{media}"
+        return hashlib.md5(content.encode('utf-8')).hexdigest()
     
     def _create_ad_from_selenium_data(self, ad_data: Dict) -> Optional[TikTokAd]:
         """Selenium verisinden TikTokAd objesi oluştur"""
