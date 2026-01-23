@@ -139,7 +139,7 @@ async def scrape_tiktok_ads(request: ScrapeRequest):
     import time
     import json as json_log
     try:
-        with open('/Users/oguzhantosun/.cursor/debug.log', 'a') as f:
+        with open('/app/debug.log', 'a') as f:
             f.write(json_log.dumps({
                 "timestamp": int(time.time() * 1000),
                 "location": "fastapi_server.py:136",
@@ -203,7 +203,7 @@ async def scrape_tiktok_ads(request: ScrapeRequest):
             
             # #region agent log
             try:
-                with open('/Users/oguzhantosun/.cursor/debug.log', 'a') as f:
+                with open('/app/debug.log', 'a') as f:
                     f.write(json_log.dumps({
                         "timestamp": int(time.time() * 1000),
                         "location": "fastapi_server.py:199",
@@ -240,7 +240,7 @@ async def scrape_tiktok_ads(request: ScrapeRequest):
         
         # #region agent log
         try:
-            with open('/Users/oguzhantosun/.cursor/debug.log', 'a') as f:
+            with open('/app/debug.log', 'a') as f:
                 f.write(json_log.dumps({
                     "timestamp": int(time.time() * 1000),
                     "location": "fastapi_server.py:210",

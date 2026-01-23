@@ -127,7 +127,7 @@ class TikTokAdScraper:
                         # #region agent log
                         try:
                             import json
-                            with open('/Users/oguzhantosun/.cursor/debug.log', 'a') as f:
+                            with open('/app/debug.log', 'a') as f:
                                 f.write(json.dumps({
                                     "timestamp": int(time.time() * 1000),
                                     "location": "tiktok_scraper.py:122",

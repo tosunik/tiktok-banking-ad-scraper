@@ -610,27 +610,55 @@ class TikTokSeleniumScraper:
                     logger.debug(f"Debug log failed: {log_e}")
                 # #endregion
             
-            # MULTI-SCROLL: Daha fazla reklam yüklemek için birden fazla scroll
-            logger.info(f"Daha fazla reklam yüklemek için scroll yapılıyor (hedef: {max_ads_per_search})...")
+            # AGGRESSIVE MULTI-SCROLL: TikTok lazy loading'i tetiklemek için
+            logger.info(f"Daha fazla reklam yüklemek için agresif scroll yapılıyor (hedef: {max_ads_per_search})...")
             
-            # 1. Scroll (ilk batch)
-            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight/3);")
-            time.sleep(2)
+            # Iterative scroll: Her seferinde daha fazla reklam yükle
+            scroll_count = 5 if max_ads_per_search > 20 else 3
             
-            # 2. Scroll (orta batch)
-            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2);")
-            time.sleep(2)
+            for scroll_i in range(scroll_count):
+                # Scroll down
+                scroll_position = (scroll_i + 1) * 800  # Her seferinde 800px aşağı
+                self.driver.execute_script(f"window.scrollBy(0, {scroll_position});")
+                time.sleep(2)
+                
+                # Check how many ads loaded so far
+                try:
+                    current_ads = len(self.driver.find_elements(By.CSS_SELECTOR, '.ad_card, div[class*="ad_card"]'))
+                    logger.info(f"Scroll {scroll_i+1}/{scroll_count}: {current_ads} reklam yüklendi")
+                    
+                    # #region agent log
+                    import json
+                    try:
+                        with open('/app/debug.log', 'a') as f:
+                            f.write(json.dumps({
+                                "timestamp": int(time.time() * 1000),
+                                "location": "tiktok_selenium_scraper.py:625",
+                                "message": "Scroll iteration",
+                                "data": {
+                                    "scroll_iteration": scroll_i + 1,
+                                    "total_scrolls": scroll_count,
+                                    "ads_loaded": current_ads,
+                                    "target": max_ads_per_search
+                                },
+                                "sessionId": "debug-session",
+                                "runId": "test",
+                                "hypothesisId": "H7"
+                            }) + '\n')
+                    except: pass
+                    # #endregion
+                    
+                    # Early exit if we have enough ads
+                    if current_ads >= max_ads_per_search:
+                        logger.info(f"Yeterli reklam yüklendi ({current_ads} >= {max_ads_per_search}), scroll durduruluyor")
+                        break
+                        
+                except Exception as e:
+                    logger.debug(f"Scroll check error: {e}")
             
-            # 3. Scroll (son batch)
+            # Final full scroll
             self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             time.sleep(3)
-            
-            # 4. Extra scroll (daha fazla reklam için - max_ads_per_search > 20 ise)
-            if max_ads_per_search > 20:
-                logger.info("Ekstra scroll yapılıyor (max_ads_per_search > 20)...")
-                for i in range(2):
-                    self.driver.execute_script("window.scrollBy(0, 1000);")
-                    time.sleep(2)
             
             # DEBUG: Screenshot + Network logs kaydet
             try:
@@ -660,10 +688,10 @@ class TikTokSeleniumScraper:
             # #region agent log
             try:
                 import json
-                with open('/Users/oguzhantosun/.cursor/debug.log', 'a') as f:
+                with open('/app/debug.log', 'a') as f:
                     f.write(json.dumps({
                         "timestamp": int(time.time() * 1000),
-                        "location": "tiktok_selenium_scraper.py:660",
+                        "location": "tiktok_selenium_scraper.py:690",
                         "message": "Ad elements found before extraction",
                         "data": {
                             "total_elements_found": len(ad_elements),
@@ -701,22 +729,15 @@ class TikTokSeleniumScraper:
                 EC.presence_of_element_located((By.TAG_NAME, "body"))
             )
             
-            # JavaScript'in çalışması ve reklamların yüklenmesi için UZUN BEKLE
-            logger.info("Sayfa yüklendi, reklamların görünmesini bekliyorum...")
-            time.sleep(5)
+            # JavaScript'in çalışması ve reklamların yüklenmesi için kısa bekle
+            # (Çünkü _scrape_ads_from_url zaten agresif scroll yaptı)
+            logger.info("Reklamların DOM'a yüklenmesini bekliyorum...")
+            time.sleep(2)
             
-            # Scroll yaparak dinamik içeriği yükle - YAVAŞ SCROLL
-            logger.info("Scroll yaparak reklamları yüklüyorum...")
-            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight/3);")
-            time.sleep(2)
-            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2);")
-            time.sleep(3)
-            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-            time.sleep(3)
-            # Tekrar başa dön
+            # Scroll to top to ensure we catch all elements
             self.driver.execute_script("window.scrollTo(0, 0);")
-            time.sleep(2)
-            logger.info("Scroll tamamlandı, elementleri arıyorum...")
+            time.sleep(1)
+            logger.info("Elementleri arıyorum...")
             
             # #region agent log
             # DEBUG: Scroll sonrası sayfa durumu
