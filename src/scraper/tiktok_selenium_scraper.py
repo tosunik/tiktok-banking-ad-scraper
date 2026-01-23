@@ -1004,7 +1004,7 @@ class TikTokSeleniumScraper:
 
             # TEST İÇİN: Video extraction'ı atla (çok yavaş - detay sayfasına gitmek 15+ saniye sürüyor)
             # Sadece thumbnail ve metadata çıkar
-                data.update(self._original_media_extraction(element))
+            data.update(self._original_media_extraction(element))
             data.update(self._extract_ad_metadata(element))
             data['extraction_method'] = 'fast_test_mode'
 
