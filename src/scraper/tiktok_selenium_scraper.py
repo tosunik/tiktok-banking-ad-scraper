@@ -610,22 +610,69 @@ class TikTokSeleniumScraper:
                     logger.debug(f"Debug log failed: {log_e}")
                 # #endregion
             
-            # AGGRESSIVE MULTI-SCROLL: TikTok lazy loading'i tetiklemek için
-            logger.info(f"Daha fazla reklam yüklemek için agresif scroll yapılıyor (hedef: {max_ads_per_search})...")
+            # "VIEW MORE" BUTTON CLICKING: TikTok'un pagination stratejisi
+            logger.info(f"'View more' butonu ile daha fazla reklam yükleniyor (hedef: {max_ads_per_search})...")
             
-            # Iterative scroll: Her seferinde daha fazla reklam yükle
-            scroll_count = 5 if max_ads_per_search > 20 else 3
+            # İlk scroll (View more butonunu görmek için)
+            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(3)
             
-            for scroll_i in range(scroll_count):
-                # Scroll down
-                scroll_position = (scroll_i + 1) * 800  # Her seferinde 800px aşağı
-                self.driver.execute_script(f"window.scrollBy(0, {scroll_position});")
-                time.sleep(2)
-                
-                # Check how many ads loaded so far
+            # View more butonuna basarak reklam yükleme
+            view_more_clicks = 0
+            max_view_more_clicks = 10  # Maksimum 10 kere tıkla (güvenlik için)
+            
+            while view_more_clicks < max_view_more_clicks:
                 try:
-                    current_ads = len(self.driver.find_elements(By.CSS_SELECTOR, '.ad_card, div[class*="ad_card"]'))
-                    logger.info(f"Scroll {scroll_i+1}/{scroll_count}: {current_ads} reklam yüklendi")
+                    # Mevcut reklam sayısını kontrol et
+                    current_ad_count = len(self.driver.find_elements(By.CSS_SELECTOR, '.ad_card, div[class*="ad_card"]'))
+                    
+                    # Hedef sayıya ulaştıysak dur
+                    if current_ad_count >= max_ads_per_search:
+                        logger.info(f"✅ Hedef reklam sayısına ulaşıldı: {current_ad_count} >= {max_ads_per_search}")
+                        break
+                    
+                    # View more butonunu bul
+                    view_more_selectors = [
+                        "//span[@class='loading_more_text']",  # Ana selector
+                        "//span[contains(@class, 'loading_more_text')]",
+                        "//span[text()='View more']",
+                        "//div[@class='loading_more']",
+                        "//div[contains(@class, 'loading_more')]"
+                    ]
+                    
+                    view_more_button = None
+                    for selector in view_more_selectors:
+                        try:
+                            view_more_button = WebDriverWait(self.driver, 3).until(
+                                EC.element_to_be_clickable((By.XPATH, selector))
+                            )
+                            if view_more_button:
+                                logger.info(f"✓ View more butonu bulundu (selector: {selector})")
+                                break
+                        except:
+                            continue
+                    
+                    if not view_more_button:
+                        logger.info("View more butonu bulunamadı, tüm reklamlar yüklendi")
+                        break
+                    
+                    # Butona tıkla
+                    try:
+                        view_more_button.click()
+                        view_more_clicks += 1
+                        logger.info(f"🖱️  View more'a tıklandı ({view_more_clicks}. tıklama)")
+                    except:
+                        # JavaScript ile tıkla
+                        self.driver.execute_script("arguments[0].click();", view_more_button)
+                        view_more_clicks += 1
+                        logger.info(f"🖱️  View more'a JavaScript ile tıklandı ({view_more_clicks}. tıklama)")
+                    
+                    # Yeni reklamların yüklenmesini bekle (kullanıcı 7-8 saniye dedi, güvenli olması için 10)
+                    logger.info("⏳ Yeni reklamlar yükleniyor (10 saniye bekleniyor)...")
+                    time.sleep(10)
+                    
+                    # Yeni reklamlar yüklendi mi kontrol et
+                    new_ad_count = len(self.driver.find_elements(By.CSS_SELECTOR, '.ad_card, div[class*="ad_card"]'))
                     
                     # #region agent log
                     import json
@@ -633,32 +680,37 @@ class TikTokSeleniumScraper:
                         with open('/app/debug.log', 'a') as f:
                             f.write(json.dumps({
                                 "timestamp": int(time.time() * 1000),
-                                "location": "tiktok_selenium_scraper.py:625",
-                                "message": "Scroll iteration",
+                                "location": "tiktok_selenium_scraper.py:650",
+                                "message": "View more clicked",
                                 "data": {
-                                    "scroll_iteration": scroll_i + 1,
-                                    "total_scrolls": scroll_count,
-                                    "ads_loaded": current_ads,
+                                    "click_count": view_more_clicks,
+                                    "ads_before": current_ad_count,
+                                    "ads_after": new_ad_count,
+                                    "new_ads_loaded": new_ad_count - current_ad_count,
                                     "target": max_ads_per_search
                                 },
                                 "sessionId": "debug-session",
                                 "runId": "test",
-                                "hypothesisId": "H7"
+                                "hypothesisId": "H8"
                             }) + '\n')
                     except: pass
                     # #endregion
                     
-                    # Early exit if we have enough ads
-                    if current_ads >= max_ads_per_search:
-                        logger.info(f"Yeterli reklam yüklendi ({current_ads} >= {max_ads_per_search}), scroll durduruluyor")
+                    if new_ad_count == current_ad_count:
+                        logger.warning("⚠️  Yeni reklam yüklenmedi, döngü sonlandırılıyor")
                         break
-                        
+                    
+                    logger.info(f"✅ {new_ad_count - current_ad_count} yeni reklam yüklendi (Toplam: {new_ad_count})")
+                    
+                    # View more butonu için tekrar scroll
+                    self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                    time.sleep(2)
+                    
                 except Exception as e:
-                    logger.debug(f"Scroll check error: {e}")
+                    logger.warning(f"View more tıklama hatası: {e}")
+                    break
             
-            # Final full scroll
-            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-            time.sleep(3)
+            logger.info(f"🎉 View more işlemi tamamlandı: {view_more_clicks} tıklama yapıldı")
             
             # DEBUG: Screenshot + Network logs kaydet
             try:
