@@ -166,24 +166,28 @@ async def scrape_tiktok_ads(request: ScrapeRequest):
                 """Uzun advertiser name'den kısa keyword çıkar"""
                 name_upper = advertiser_name.upper()
                 
-                # BASIT STRATEJI: Tam advertiser name'i kullan (TikTok'ta birebir eşleşir)
-                # Space'leri koruyoruz, URL encoding otomatik yapılacak
+                # TAM İSİMLER (TikTok UI'dan alındı - tırnak ile exact match)
+                # TikTok sadece TAM ŞİRKET İSMİ ile eşleşiyor (A.Ş. / ANONIM SIRKETI dahil)
                 bank_mapping = {
-                    # Garanti - Tam isim kullan
-                    "GARANTI": "TURKIYE GARANTI BANKASI",
-                    "GARANTI BBVA": "TURKIYE GARANTI BANKASI",
-                    "GARANTI BANKASI": "TURKIYE GARANTI BANKASI",
-                    "TURKIYE GARANTI BANKASI": "TURKIYE GARANTI BANKASI",
-                    # Akbank - Tam isim kullan
-                    "AKBANK": "AKBANK",
-                    "AKBANK T.A.S": "AKBANK",
+                    # GARANTI - TAM İSİM
+                    "GARANTI": "TURKIYE GARANTI BANKASI ANONIM SIRKETI",
+                    "GARANTI BBVA": "TURKIYE GARANTI BANKASI ANONIM SIRKETI",
+                    "GARANTI BANKASI": "TURKIYE GARANTI BANKASI ANONIM SIRKETI",
+                    "TURKIYE GARANTI BANKASI": "TURKIYE GARANTI BANKASI ANONIM SIRKETI",
+                    "TURKIYE GARANTI BANKASI ANONIM SIRKETI": "TURKIYE GARANTI BANKASI ANONIM SIRKETI",
+                    # AKBANK - TAM İSİM
+                    "AKBANK": "AKBANK TURK ANONIM SIRKETI",
+                    "AKBANK T.A.S": "AKBANK TURK ANONIM SIRKETI",
                     "AKBANK TURK": "AKBANK TURK ANONIM SIRKETI",
-                    # Yapı Kredi - Tam isim kullan
-                    "YAPI VE KREDI": "YAPI VE KREDI BANKASI",
-                    "YAPI KREDI": "YAPI VE KREDI BANKASI",
-                    "YAPIKREDI": "YAPI VE KREDI BANKASI",
-                    "KREDI BANKASI": "YAPI VE KREDI BANKASI",
-                    # İş Bankası
+                    "AKBANK TURK ANONIM SIRKETI": "AKBANK TURK ANONIM SIRKETI",
+                    # YAPI KREDİ - TAM İSİM
+                    "YAPI VE KREDI": "YAPI VE KREDI BANKASI ANONIM SIRKETI",
+                    "YAPI KREDI": "YAPI VE KREDI BANKASI ANONIM SIRKETI",
+                    "YAPIKREDI": "YAPI VE KREDI BANKASI ANONIM SIRKETI",
+                    "KREDI BANKASI": "YAPI VE KREDI BANKASI ANONIM SIRKETI",
+                    "YAPI VE KREDI BANKASI": "YAPI VE KREDI BANKASI ANONIM SIRKETI",
+                    "YAPI VE KREDI BANKASI ANONIM SIRKETI": "YAPI VE KREDI BANKASI ANONIM SIRKETI",
+                    # İŞ BANKASI - TAM İSİM (kullanıcı sağlarsa güncellenecek)
                     "IS BANKASI": "TURKIYE IS BANKASI",
                     "ISBANK": "TURKIYE IS BANKASI",
                     "TURKIYE IS BANKASI": "TURKIYE IS BANKASI",
