@@ -417,7 +417,8 @@ class TikTokSeleniumScraper:
         ]
         
         final_url = url + "?" + "&".join(params)
-        logger.debug(f"🔗 Build URL: search_term='{search_term}' → with_quotes='"{search_term}"' → encoded='{encoded_term}'")
+        # Log: search_term with quotes for exact match
+        logger.debug(f"🔗 Build URL: search_term={search_term} (with quotes for exact match) → encoded={encoded_term}")
         return final_url
     
     def search_ads_by_advertiser(self, advertiser_names: List[str], max_ads: int = 100) -> List[Dict]:
