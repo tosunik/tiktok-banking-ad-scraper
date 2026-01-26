@@ -557,6 +557,38 @@ class TikTokSeleniumScraper:
             logger.info(f"Sayfa yüklendi (15s), search field'a yazılıyor: '{search_keyword}'")
             time.sleep(3)
             
+            # BAN DETECTION: TikTok bizi engelledi mi kontrol et
+            try:
+                page_text = self.driver.find_element(By.TAG_NAME, "body").text.lower()
+                ban_indicators = [
+                    "access denied",
+                    "blocked",
+                    "captcha",
+                    "verify you are human",
+                    "unusual traffic",
+                    "forbidden",
+                    "temporarily unavailable"
+                ]
+                
+                for indicator in ban_indicators:
+                    if indicator in page_text:
+                        logger.error(f"🚫 TikTok BAN DETECTED: '{indicator}' found in page!")
+                        logger.error("Railway IP banned by TikTok. Restart service or wait 1-2 hours.")
+                        # Screenshot kaydet
+                        try:
+                            self.driver.save_screenshot('/app/ban_screenshot.png')
+                            logger.error("📸 Ban screenshot: /app/ban_screenshot.png")
+                        except:
+                            pass
+                        return []
+                
+                # Boş sayfa kontrolü
+                if len(page_text.strip()) < 100:
+                    logger.warning(f"⚠️ Sayfa neredeyse boş (len={len(page_text)}). Possible ban or loading issue.")
+                    
+            except Exception as ban_check_err:
+                logger.warning(f"Ban detection hatası: {ban_check_err}")
+            
             # AUTOCOMPLETE INTERACTION: Search field'a yaz ve dropdown'dan seç
             if search_keyword:
                 try:
@@ -578,6 +610,20 @@ class TikTokSeleniumScraper:
                     # Autocomplete dropdown'un açılmasını bekle
                     logger.info("⏳ Autocomplete dropdown bekleniyor (2 saniye)...")
                     time.sleep(2)
+                    
+                    # DEBUG: Autocomplete dropdown HTML'ini logla
+                    try:
+                        page_html = self.driver.page_source
+                        # Search field etrafındaki HTML'i kaydet
+                        logger.info("📸 DEBUG: Page HTML kaydediliyor...")
+                        with open('/app/autocomplete_debug.html', 'w', encoding='utf-8') as f:
+                            f.write(page_html)
+                        
+                        # Screenshot al
+                        self.driver.save_screenshot('/app/autocomplete_screenshot.png')
+                        logger.info("📸 Screenshot kaydedildi: /app/autocomplete_screenshot.png")
+                    except Exception as debug_err:
+                        logger.warning(f"Debug kayıt hatası: {debug_err}")
                     
                     # AUTOCOMPLETE DROPDOWN'DAN SEÇ
                     # Dropdown item'ları bulmaya çalış
