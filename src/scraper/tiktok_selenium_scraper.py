@@ -5,6 +5,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 # Bu satırı KALDIR - artık gerekli değil: from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
@@ -397,28 +398,22 @@ class TikTokSeleniumScraper:
         # Keyword veya advertiser name (ikisi aynı parametreyi kullanıyor)
         search_term = keyword if keyword else advertiser_name
         
-        # TikTok EXACT MATCH için tırnak işareti gerekiyor!
-        # "TURKIYE GARANTI BANKASI" → exact match ✓
-        # TURKIYE GARANTI BANKASI → fuzzy search ❌
-        if search_term:
-            search_term_with_quotes = f'"{search_term}"'
-            encoded_term = quote(search_term_with_quotes, safe='')
-        else:
-            encoded_term = ""
+        # YENİ STRATEJİ: URL'de adv_name OLMADAN boş sayfa aç
+        # Autocomplete interaction için UI'da manuel yazacağız
+        # search_term artık URL'de değil, UI interaction'da kullanılacak
         
         params = [
             f"region={region}",
             f"start_time={start_timestamp}",
             f"end_time={end_timestamp}",
-            f"adv_name={encoded_term}" if encoded_term else "adv_name=",
-            "adv_biz_ids=",  # TikTok'un güncel URL formatında gerekli (boş string)
+            "adv_name=",  # BOŞ! (UI'da yazacağız)
+            "adv_biz_ids=",
             "query_type=1",
             "sort_type=last_shown_date,desc"
         ]
         
         final_url = url + "?" + "&".join(params)
-        # Log: search_term with quotes for exact match
-        logger.debug(f"🔗 Build URL: search_term={search_term} (with quotes for exact match) → encoded={encoded_term}")
+        logger.debug(f"🔗 Build URL: BOŞ sayfa (adv_name yok) → UI'da yazılacak: '{search_term}'")
         return final_url
     
     def search_ads_by_advertiser(self, advertiser_names: List[str], max_ads: int = 100) -> List[Dict]:
@@ -444,6 +439,7 @@ class TikTokSeleniumScraper:
             for advertiser in advertiser_names:
                 logger.info(f"'{advertiser}' reklamları aranıyor...")
                 
+                # BOŞ URL oluştur (adv_name parametresi olmadan)
                 search_url = self.build_search_url(advertiser_name=advertiser)
                 logger.info(f"URL: {search_url}")
                 
@@ -451,7 +447,8 @@ class TikTokSeleniumScraper:
                 remaining_ads = max_ads - len(all_ads)
                 current_max = min(max_ads_per_search, remaining_ads)
                 
-                ads = self._scrape_ads_from_url(search_url, max_ads_per_search=current_max)
+                # UI interaction için advertiser name'i geç
+                ads = self._scrape_ads_from_url(search_url, max_ads_per_search=current_max, search_keyword=advertiser)
                 all_ads.extend(ads)
                 
                 logger.info(f"'{advertiser}' için {len(ads)} reklam bulundu (Toplam: {len(all_ads)})")
@@ -500,6 +497,7 @@ class TikTokSeleniumScraper:
             for kw in keywords:
                 logger.info(f"'{kw}' keyword'ü aranıyor...")
                 
+                # BOŞ URL oluştur (adv_name parametresi olmadan)
                 search_url = self.build_search_url(keyword=kw)
                 logger.info(f"URL: {search_url}")
                 
@@ -507,7 +505,8 @@ class TikTokSeleniumScraper:
                 remaining_ads = max_ads - len(all_ads)
                 current_max = min(max_ads_per_search, remaining_ads)
                 
-                ads = self._scrape_ads_from_url(search_url, max_ads_per_search=current_max)
+                # UI interaction için keyword'ü geç
+                ads = self._scrape_ads_from_url(search_url, max_ads_per_search=current_max, search_keyword=kw)
                 all_ads.extend(ads)
                 
                 logger.info(f"'{kw}' için {len(ads)} reklam bulundu (Toplam: {len(all_ads)})")
@@ -536,20 +535,93 @@ class TikTokSeleniumScraper:
         
         return self.search_ads_by_keyword(banking_keywords, max_ads)
     
-    def _scrape_ads_from_url(self, url: str, max_ads_per_search: int = 3) -> List[Dict]:
-        """Belirli URL'den reklamları scrape et - Hızlı test versiyonu"""
+    def _scrape_ads_from_url(self, url: str, max_ads_per_search: int = 3, search_keyword: str = "") -> List[Dict]:
+        """Belirli URL'den reklamları scrape et - UI Interaction versiyonu
+        
+        Args:
+            url: Base TikTok Ad Library URL (region, dates dahil)
+            max_ads_per_search: Maksimum reklam sayısı
+            search_keyword: Aranacak advertiser name (autocomplete için)
+        """
         ads = []
         
         try:
+            # BOŞS sayfayı aç (adv_name parametresi OLMADAN - autocomplete için!)
             self.driver.get(url)
             
-            # Sayfanın yüklenmesini bekle
-            WebDriverWait(self.driver, 10).until(
+            # Sayfanın yüklenmesini UZUN BEKLE (8-9 saniye sürebilir!)
+            WebDriverWait(self.driver, 15).until(
                 EC.presence_of_element_located((By.TAG_NAME, "body"))
             )
             
-            logger.info("Sayfa yüklendi, Search butonunu arıyorum...")
+            logger.info(f"Sayfa yüklendi (15s), search field'a yazılıyor: '{search_keyword}'")
             time.sleep(3)
+            
+            # AUTOCOMPLETE INTERACTION: Search field'a yaz ve dropdown'dan seç
+            if search_keyword:
+                try:
+                    # Search field'ı bul (input field)
+                    search_input = WebDriverWait(self.driver, 10).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, "input[placeholder*='Advertiser'], input[placeholder*='advertiser'], input[placeholder*='keyword']"))
+                    )
+                    
+                    # Field'ı temizle
+                    search_input.clear()
+                    time.sleep(0.5)
+                    
+                    # Advertiser name'i YAVAŞÇA yaz (autocomplete trigger için)
+                    logger.info(f"🔤 Search field'a yazılıyor: {search_keyword}")
+                    for char in search_keyword:
+                        search_input.send_keys(char)
+                        time.sleep(0.05)  # Her karakter arası 50ms bekle
+                    
+                    # Autocomplete dropdown'un açılmasını bekle
+                    logger.info("⏳ Autocomplete dropdown bekleniyor (2 saniye)...")
+                    time.sleep(2)
+                    
+                    # AUTOCOMPLETE DROPDOWN'DAN SEÇ
+                    # Dropdown item'ları bulmaya çalış
+                    try:
+                        # TikTok autocomplete suggestion'ları
+                        dropdown_selectors = [
+                            f"//div[contains(@class, 'suggestion') or contains(@class, 'dropdown')]//span[contains(text(), '{search_keyword}')]",
+                            f"//div[contains(@class, 'option')]//span[contains(text(), '{search_keyword}')]",
+                            f"//*[contains(@class, 'menu-item') or contains(@class, 'option')][contains(text(), '{search_keyword}')]"
+                        ]
+                        
+                        dropdown_clicked = False
+                        for selector in dropdown_selectors:
+                            try:
+                                suggestion = WebDriverWait(self.driver, 3).until(
+                                    EC.element_to_be_clickable((By.XPATH, selector))
+                                )
+                                logger.info(f"✅ Autocomplete suggestion bulundu: '{suggestion.text[:50]}...'")
+                                suggestion.click()
+                                dropdown_clicked = True
+                                logger.info("🖱️ Autocomplete suggestion'a tıklandı!")
+                                time.sleep(1)
+                                break
+                            except:
+                                continue
+                        
+                        if not dropdown_clicked:
+                            logger.warning("⚠️ Autocomplete dropdown bulunamadı, Enter tuşu ile devam ediliyor...")
+                            search_input.send_keys(Keys.ENTER)
+                            time.sleep(2)
+                    
+                    except Exception as dropdown_error:
+                        logger.warning(f"Autocomplete dropdown hatası: {dropdown_error}")
+                        # Fallback: Enter tuşuna bas
+                        search_input.send_keys(Keys.ENTER)
+                        time.sleep(2)
+                    
+                except Exception as search_input_error:
+                    logger.warning(f"Search field interaction hatası: {search_input_error}")
+                    # URL parametresi ile devam et (eski yöntem)
+                    pass
+            
+            # Artık URL parametresi ile gelmiyoruz, manuel search yaptık
+            time.sleep(2)
             
             # #region agent log
             # DEBUG: Sayfadaki tüm butonları logla
@@ -586,19 +658,18 @@ class TikTokSeleniumScraper:
                 logger.debug(f"Debug log failed: {log_e}")
             # #endregion
             
-            # ZORUNLU: Search butonuna tıkla (URL parametresi çalışmıyor!)
-            # Advertiser name zaten input'ta (URL'den geldi), sadece Search'e tıkla
+            # SEARCH BUTONUNA TIKLA (Autocomplete selection'dan sonra)
             try:
                 # Search butonunu bul ve tıkla
-                search_button = WebDriverWait(self.driver, 5).until(
+                search_button = WebDriverWait(self.driver, 10).until(
                     EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Search') or contains(text(), 'search')]"))
                 )
-                logger.info("Search butonuna tıklıyorum...")
+                logger.info("🔍 Search butonuna tıklıyorum (autocomplete selection sonrası)...")
                 search_button.click()
                 
-                # Sonuçların yüklenmesini UZUN BEKLE
-                logger.info("Filtrelenmiş sonuçlar yükleniyor...")
-                time.sleep(8)
+                # Sonuçların yüklenmesini UZUN BEKLE (8-9 saniye sürebilir!)
+                logger.info("⏳ Filtrelenmiş sonuçlar yükleniyor (10 saniye bekleniyor)...")
+                time.sleep(10)
                 
                 # #region agent log
                 # DEBUG: Search'ten sonra durum
