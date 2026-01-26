@@ -397,9 +397,14 @@ class TikTokSeleniumScraper:
         # Keyword veya advertiser name (ikisi aynı parametreyi kullanıyor)
         search_term = keyword if keyword else advertiser_name
         
-        # URL encode et (space'ler → %20, özel karakterler encode edilir)
-        # TikTok tam advertiser name'leri kabul ediyor
-        encoded_term = quote(search_term, safe='') if search_term else ""
+        # TikTok EXACT MATCH için tırnak işareti gerekiyor!
+        # "TURKIYE GARANTI BANKASI" → exact match ✓
+        # TURKIYE GARANTI BANKASI → fuzzy search ❌
+        if search_term:
+            search_term_with_quotes = f'"{search_term}"'
+            encoded_term = quote(search_term_with_quotes, safe='')
+        else:
+            encoded_term = ""
         
         params = [
             f"region={region}",
@@ -412,7 +417,7 @@ class TikTokSeleniumScraper:
         ]
         
         final_url = url + "?" + "&".join(params)
-        logger.debug(f"🔗 Build URL: search_term='{search_term}' → encoded='{encoded_term}'")
+        logger.debug(f"🔗 Build URL: search_term='{search_term}' → with_quotes='"{search_term}"' → encoded='{encoded_term}'")
         return final_url
     
     def search_ads_by_advertiser(self, advertiser_names: List[str], max_ads: int = 100) -> List[Dict]:
