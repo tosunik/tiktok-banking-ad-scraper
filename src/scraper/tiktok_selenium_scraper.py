@@ -14,6 +14,7 @@ import time
 import json
 import re
 import requests
+from urllib.parse import quote
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from pathlib import Path
@@ -396,17 +397,23 @@ class TikTokSeleniumScraper:
         # Keyword veya advertiser name (ikisi aynı parametreyi kullanıyor)
         search_term = keyword if keyword else advertiser_name
         
+        # URL encode et (space'ler → %20, özel karakterler encode edilir)
+        # TikTok tam advertiser name'leri kabul ediyor
+        encoded_term = quote(search_term, safe='') if search_term else ""
+        
         params = [
             f"region={region}",
             f"start_time={start_timestamp}",
             f"end_time={end_timestamp}",
-            f"adv_name={search_term}" if search_term else "adv_name=",
+            f"adv_name={encoded_term}" if encoded_term else "adv_name=",
             "adv_biz_ids=",  # TikTok'un güncel URL formatında gerekli (boş string)
             "query_type=1",
             "sort_type=last_shown_date,desc"
         ]
         
-        return url + "?" + "&".join(params)
+        final_url = url + "?" + "&".join(params)
+        logger.debug(f"🔗 Build URL: search_term='{search_term}' → encoded='{encoded_term}'")
+        return final_url
     
     def search_ads_by_advertiser(self, advertiser_names: List[str], max_ads: int = 100) -> List[Dict]:
         """Reklam veren adlarına göre reklam ara"""
@@ -978,35 +985,31 @@ class TikTokSeleniumScraper:
             return None
     
     def _extract_from_selenium_element(self, element) -> Dict:
-        """Hızlı test versiyonu - Video extraction atlanıyor (çok yavaş)"""
+        """
+        GÜNCEL VERSİYON: Detay sayfasından gerçek video çeker
+        """
         data = {}
         
         try:
-            # #region agent log
-            try:
-                with open("/app/debug.log", "a", encoding="utf-8") as f:
-                    f.write(json.dumps({
-                        "sessionId": "debug-session",
-                        "runId": "video-debug-1",
-                        "hypothesisId": "A",
-                        "location": "tiktok_selenium_scraper.py:_extract_from_selenium_element:start",
-                        "message": "Fast test mode active; detail-page video extraction is skipped",
-                        "data": {
-                            "fast_test_mode": True,
-                            "tag_name": getattr(element, "tag_name", None),
-                            "class_attr": (element.get_attribute("class") or "")[:120]
-                        },
-                        "timestamp": int(time.time() * 1000)
-                    }) + "\n")
-            except Exception:
-                pass
-            # #endregion
-
-            # TEST İÇİN: Video extraction'ı atla (çok yavaş - detay sayfasına gitmek 15+ saniye sürüyor)
-            # Sadece thumbnail ve metadata çıkar
-            data.update(self._original_media_extraction(element))
+            # 1. Önce metadata al (advertiser name, dates, ad_url)
             data.update(self._extract_ad_metadata(element))
-            data['extraction_method'] = 'fast_test_mode'
+            
+            # 2. Ad URL'sini al
+            ad_url = data.get('ad_url', '')
+            
+            # 3. Detay sayfasından video çek
+            if ad_url and '/ads/detail/' in ad_url:
+                # DETAY SAYFASINDAN gerçek video al
+                media_data = self._extract_video_from_detail_page(ad_url)
+                data.update(media_data)
+                logger.info(f"✅ Detay sayfası extraction: media_type={media_data.get('media_type')}, URLs={len(media_data.get('media_urls', []))}")
+            else:
+                # Fallback: Ana sayfadan thumbnail al
+                logger.warning("⚠️ Ad URL bulunamadı, ana sayfadan thumbnail alınıyor...")
+                media_data = self._original_media_extraction(element)
+                data.update(media_data)
+            
+            data['extraction_method'] = 'detail_page_video'
 
             # #region agent log
             try:
@@ -1196,8 +1199,115 @@ class TikTokSeleniumScraper:
         
         return data
 
+    def _extract_video_from_detail_page(self, ad_url: str) -> Dict:
+        """
+        DETAY SAYFASINDAN GERÇEK VIDEO URL'SİNİ ÇEK
+        Ana sayfadaki thumbnail yerine detay sayfasındaki gerçek video URL'sini al
+        """
+        data = {
+            'media_urls': [],
+            'media_type': 'text',
+            'video_found': False,
+            'extraction_method': 'detail_page'
+        }
+        
+        if not ad_url or 'detail' not in ad_url:
+            logger.warning("Geçersiz detay sayfası URL'si")
+            return data
+        
+        current_url = self.driver.current_url
+        
+        try:
+            # Detay sayfasına git
+            logger.info(f"📄 Detay sayfasına gidiliyor: {ad_url[:80]}...")
+            self.driver.get(ad_url)
+            time.sleep(3)  # Sayfa yüklensin
+            
+            # Video elementini bul
+            video_selectors = [
+                'video source',  # <video><source src="..."></video>
+                'video',         # <video src="...">
+                '[class*="video"] video',
+                '.video-player video'
+            ]
+            
+            for selector in video_selectors:
+                try:
+                    if 'source' in selector:
+                        # Source tag'ını ara
+                        sources = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                        for source in sources:
+                            src = source.get_attribute('src')
+                            if src and ('.mp4' in src.lower() or 'video' in src.lower()):
+                                data['media_urls'].append(src)
+                                data['media_type'] = 'video'
+                                data['video_found'] = True
+                                logger.info(f"✅ VIDEO bulundu (detay sayfası): {src[:80]}...")
+                                return data
+                    else:
+                        # Video tag'ını ara
+                        videos = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                        for video in videos:
+                            # Önce src attribute
+                            src = video.get_attribute('src')
+                            if src and ('.mp4' in src.lower() or 'video' in src.lower()):
+                                data['media_urls'].append(src)
+                                data['media_type'] = 'video'
+                                data['video_found'] = True
+                                logger.info(f"✅ VIDEO bulundu (detay sayfası): {src[:80]}...")
+                                return data
+                            
+                            # Source child tag'ını kontrol et
+                            try:
+                                source = video.find_element(By.TAG_NAME, 'source')
+                                src = source.get_attribute('src')
+                                if src and ('.mp4' in src.lower() or 'video' in src.lower()):
+                                    data['media_urls'].append(src)
+                                    data['media_type'] = 'video'
+                                    data['video_found'] = True
+                                    logger.info(f"✅ VIDEO bulundu (detay sayfası): {src[:80]}...")
+                                    return data
+                            except:
+                                pass
+                except Exception as e:
+                    logger.debug(f"Selector {selector} ile hata: {e}")
+                    continue
+            
+            # Video bulunamadı, image thumbnail al
+            logger.warning("⚠️ Detay sayfasında video bulunamadı, image thumbnail alınıyor...")
+            img_selectors = ['img[src*="ibyteimg"]', 'img[src*="tiktokcdn"]', '.video-player img']
+            for selector in img_selectors:
+                try:
+                    imgs = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                    for img in imgs:
+                        src = img.get_attribute('src')
+                        if src and ('ibyteimg' in src or 'tiktokcdn' in src):
+                            data['media_urls'].append(src)
+                            data['media_type'] = 'image'
+                            logger.info(f"📷 IMAGE bulundu (detay sayfası): {src[:80]}...")
+                            break
+                    if data['media_urls']:
+                        break
+                except:
+                    continue
+                    
+        except Exception as e:
+            logger.error(f"Detay sayfası extraction hatası: {e}")
+        finally:
+            # Ana sayfaya geri dön
+            try:
+                self.driver.get(current_url)
+                time.sleep(2)
+            except:
+                pass
+        
+        return data
+
     def _original_media_extraction(self, element) -> Dict:
-        """Media extraction - Güncel TikTok yapısı"""
+        """
+        ESKİ METOD - SADECE FALLBACK
+        Ana sayfadan thumbnail alır (yavaş olduğunda kullan)
+        """
         data = {
             'media_urls': [],
             'media_type': 'text',

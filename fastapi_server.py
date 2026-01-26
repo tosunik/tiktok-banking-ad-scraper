@@ -166,37 +166,38 @@ async def scrape_tiktok_ads(request: ScrapeRequest):
                 """Uzun advertiser name'den kısa keyword çıkar"""
                 name_upper = advertiser_name.upper()
                 
-                # Banka isimleri mapping (uzun → kısa)
-                # SPESİFİK keyword'ler - generic "yapi" gibi kelimeler YOK
+                # BASIT STRATEJI: Tam advertiser name'i kullan (TikTok'ta birebir eşleşir)
+                # Space'leri koruyoruz, URL encoding otomatik yapılacak
                 bank_mapping = {
-                    # Garanti
-                    "GARANTI": "garanti bankasi",
-                    "GARANTI BBVA": "garanti bankasi",
-                    "GARANTI BANKASI": "garanti bankasi",
-                    # Akbank
-                    "AKBANK": "akbank",
-                    "AKBANK T.A.S": "akbank",
-                    "AKBANK TURK": "akbank",
-                    # Yapı Kredi - SPESİFİK keywords (generic "yapi" YOK!)
-                    "YAPI VE KREDI": "yapi kredi bankasi",
-                    "YAPI KREDI": "yapi kredi bankasi",
-                    "YAPIKREDI": "yapi kredi bankasi",
-                    "KREDI BANKASI": "yapi kredi bankasi",
+                    # Garanti - Tam isim kullan
+                    "GARANTI": "TURKIYE GARANTI BANKASI",
+                    "GARANTI BBVA": "TURKIYE GARANTI BANKASI",
+                    "GARANTI BANKASI": "TURKIYE GARANTI BANKASI",
+                    "TURKIYE GARANTI BANKASI": "TURKIYE GARANTI BANKASI",
+                    # Akbank - Tam isim kullan
+                    "AKBANK": "AKBANK",
+                    "AKBANK T.A.S": "AKBANK",
+                    "AKBANK TURK": "AKBANK TURK ANONIM SIRKETI",
+                    # Yapı Kredi - Tam isim kullan
+                    "YAPI VE KREDI": "YAPI VE KREDI BANKASI",
+                    "YAPI KREDI": "YAPI VE KREDI BANKASI",
+                    "YAPIKREDI": "YAPI VE KREDI BANKASI",
+                    "KREDI BANKASI": "YAPI VE KREDI BANKASI",
                     # İş Bankası
-                    "IS BANKASI": "is bankasi",
-                    "ISBANK": "is bankasi",
-                    "TURKIYE IS BANKASI": "is bankasi",
+                    "IS BANKASI": "TURKIYE IS BANKASI",
+                    "ISBANK": "TURKIYE IS BANKASI",
+                    "TURKIYE IS BANKASI": "TURKIYE IS BANKASI",
                     # Diğer bankalar
-                    "QNB": "qnb finansbank",
-                    "QNB FINANSBANK": "qnb finansbank",
-                    "ING": "ing bank",
-                    "ING BANK": "ing bank",
-                    "DENIZBANK": "denizbank",
-                    "ZIRAAT": "ziraat bankasi",
-                    "ZIRAAT BANKASI": "ziraat bankasi",
-                    "HALKBANK": "halkbank",
-                    "VAKIFBANK": "vakifbank",
-                    "VAKIF": "vakifbank"
+                    "QNB": "QNB FINANSBANK",
+                    "QNB FINANSBANK": "QNB FINANSBANK",
+                    "ING": "ING BANK",
+                    "ING BANK": "ING BANK",
+                    "DENIZBANK": "DENIZBANK",
+                    "ZIRAAT": "ZIRAAT BANKASI",
+                    "ZIRAAT BANKASI": "ZIRAAT BANKASI",
+                    "HALKBANK": "HALKBANK",
+                    "VAKIFBANK": "VAKIFBANK",
+                    "VAKIF": "VAKIFBANK"
                 }
                 
                 # Mapping'de ara
