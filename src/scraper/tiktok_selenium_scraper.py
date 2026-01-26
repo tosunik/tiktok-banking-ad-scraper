@@ -626,13 +626,26 @@ class TikTokSeleniumScraper:
                         logger.warning(f"Debug kayıt hatası: {debug_err}")
                     
                     # AUTOCOMPLETE DROPDOWN'DAN SEÇ
-                    # Dropdown item'ları bulmaya çalış
+                    # Gerçek TikTok HTML yapısına göre selector'lar
                     try:
-                        # TikTok autocomplete suggestion'ları
+                        # TikTok'un gerçek autocomplete dropdown yapısı:
+                        # <div class="exact_field_label">
+                        #   <span class="exact_field_label_text">Search this exact phrase</span>
+                        #   <span class="exact_field_label_text_dark">"TURKIYE GARANTI BANKASI..."</span>
+                        # </div>
                         dropdown_selectors = [
-                            f"//div[contains(@class, 'suggestion') or contains(@class, 'dropdown')]//span[contains(text(), '{search_keyword}')]",
-                            f"//div[contains(@class, 'option')]//span[contains(text(), '{search_keyword}')]",
-                            f"//*[contains(@class, 'menu-item') or contains(@class, 'option')][contains(text(), '{search_keyword}')]"
+                            # En spesifik: exact_field_label div'i (tıklanabilir)
+                            "//div[@class='exact_field_label']",
+                            "//div[contains(@class, 'exact_field_label')]",
+                            # Text içeren span
+                            "//span[@class='exact_field_label_text_dark']",
+                            "//span[contains(@class, 'exact_field_label_text_dark')]",
+                            # Popover içinde
+                            "//div[@class='byted-popover']//div[@class='exact_field_label']",
+                            "//div[contains(@class, 'popover')]//div[contains(@class, 'exact_field_label')]",
+                            # Fallback: Text içeriğine göre
+                            f"//div[contains(@class, 'exact_field_label')]//span[contains(text(), '{search_keyword[:20]}')]",
+                            f"//span[contains(text(), 'Search this exact phrase')]/following-sibling::span"
                         ]
                         
                         dropdown_clicked = False
@@ -641,13 +654,15 @@ class TikTokSeleniumScraper:
                                 suggestion = WebDriverWait(self.driver, 3).until(
                                     EC.element_to_be_clickable((By.XPATH, selector))
                                 )
-                                logger.info(f"✅ Autocomplete suggestion bulundu: '{suggestion.text[:50]}...'")
+                                suggestion_text = suggestion.text or suggestion.get_attribute('textContent') or ""
+                                logger.info(f"✅ Autocomplete suggestion bulundu: '{suggestion_text[:80]}...'")
                                 suggestion.click()
                                 dropdown_clicked = True
                                 logger.info("🖱️ Autocomplete suggestion'a tıklandı!")
-                                time.sleep(1)
+                                time.sleep(2)  # Dropdown seçiminden sonra bekle
                                 break
-                            except:
+                            except Exception as selector_err:
+                                logger.debug(f"Selector '{selector}' başarısız: {selector_err}")
                                 continue
                         
                         if not dropdown_clicked:
@@ -706,12 +721,37 @@ class TikTokSeleniumScraper:
             
             # SEARCH BUTONUNA TIKLA (Autocomplete selection'dan sonra)
             try:
-                # Search butonunu bul ve tıkla
-                search_button = WebDriverWait(self.driver, 10).until(
-                    EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Search') or contains(text(), 'search')]"))
-                )
-                logger.info("🔍 Search butonuna tıklıyorum (autocomplete selection sonrası)...")
-                search_button.click()
+                # Search butonunu bul (birden fazla selector dene)
+                search_button_selectors = [
+                    "//button[contains(text(), 'Search')]",
+                    "//button[contains(@class, 'search')]",
+                    "//button[@type='submit']",
+                    "//button[contains(., 'Search')]",
+                    "//*[@role='button' and contains(text(), 'Search')]"
+                ]
+                
+                search_button = None
+                for selector in search_button_selectors:
+                    try:
+                        search_button = WebDriverWait(self.driver, 3).until(
+                            EC.element_to_be_clickable((By.XPATH, selector))
+                        )
+                        logger.info(f"✅ Search butonu bulundu: {selector}")
+                        break
+                    except:
+                        continue
+                
+                if search_button:
+                    logger.info("🔍 Search butonuna tıklıyorum (autocomplete selection sonrası)...")
+                    search_button.click()
+                else:
+                    logger.warning("⚠️ Search butonu bulunamadı, Enter tuşu ile devam ediliyor...")
+                    # Fallback: Enter tuşu
+                    try:
+                        search_input = self.driver.find_element(By.CSS_SELECTOR, "input[placeholder*='Advertiser'], input[placeholder*='keyword']")
+                        search_input.send_keys(Keys.ENTER)
+                    except:
+                        pass
                 
                 # Sonuçların yüklenmesini UZUN BEKLE (8-9 saniye sürebilir!)
                 logger.info("⏳ Filtrelenmiş sonuçlar yükleniyor (10 saniye bekleniyor)...")
