@@ -375,14 +375,14 @@ class TikTokSeleniumScraper:
                         advertiser_name: str = "",
                         keyword: str = "",
                         region: str = "TR",
-                        days_back: int = 7) -> str:
+                        days_back: int = 30) -> str:
         """TikTok Ad Library arama URL'i oluştur
         
         Args:
             advertiser_name: Reklam veren adı (tam eşleşme arar)
             keyword: Genel keyword (reklam içeriğinde arar) - advertiser_name yerine kullanılabilir
             region: Ülke kodu
-            days_back: Kaç gün geriye gidilecek (default: son 7 gün)
+            days_back: Kaç gün geriye gidilecek
         """
         
         # Tarih aralığı hesapla (Unix timestamp milisaniye)
@@ -797,16 +797,52 @@ class TikTokSeleniumScraper:
             except: pass
             # #endregion
             
-            # Her reklam için detay çıkar
+            # YENI STRATEJİ: 2-fazlı extraction
+            # Faz 1: Önce TÜM metadata'yı topla (stale element önlemek için)
+            logger.info(f"📊 Faz 1: {len(ad_elements[:max_ads_per_search])} reklam için metadata toplanıyor...")
+            metadata_list = []
             for i, ad_element in enumerate(ad_elements[:max_ads_per_search]):
                 try:
-                    ad_data = self._extract_ad_data(ad_element, i)
-                    if ad_data:
-                        ads.append(ad_data)
-                        
+                    # Sadece metadata al (advertiser, dates, ad_url) - detay sayfasına gitme!
+                    metadata = self._extract_ad_metadata(ad_element)
+                    metadata['scrape_index'] = i
+                    metadata['scraped_at'] = datetime.now().isoformat()
+                    metadata_list.append(metadata)
+                    logger.debug(f"✓ Metadata {i}: {metadata.get('advertiser_name', 'Unknown')}")
                 except Exception as e:
-                    logger.warning(f"Reklam {i+1} işlenirken hata: {e}")
+                    logger.warning(f"Metadata {i} çıkarma hatası: {e}")
                     continue
+            
+            logger.info(f"✅ Faz 1 tamamlandı: {len(metadata_list)} metadata toplandı")
+            
+            # Faz 2: Her metadata için detay sayfasından video çek
+            logger.info(f"🎥 Faz 2: {len(metadata_list)} reklam için video çekiliyor...")
+            for i, metadata in enumerate(metadata_list):
+                try:
+                    ad_data = metadata.copy()
+                    
+                    # Detay sayfasından video çek
+                    ad_url = metadata.get('ad_url', '')
+                    if ad_url and '/ads/detail/' in ad_url:
+                        media_data = self._extract_video_from_detail_page(ad_url)
+                        ad_data.update(media_data)
+                        logger.info(f"✅ [{i+1}/{len(metadata_list)}] Video: {ad_data.get('advertiser_name', 'Unknown')} - {media_data.get('media_type')}")
+                    else:
+                        logger.warning(f"⚠️ [{i+1}/{len(metadata_list)}] Ad URL yok, video skip")
+                        ad_data['media_type'] = 'text'
+                        ad_data['media_urls'] = []
+                    
+                    ads.append(ad_data)
+                    
+                except Exception as e:
+                    logger.warning(f"Reklam {i+1} video extraction hatası: {e}")
+                    # Metadata'yı yine de ekle (video olmadan)
+                    metadata['media_type'] = 'text'
+                    metadata['media_urls'] = []
+                    ads.append(metadata)
+                    continue
+            
+            logger.info(f"✅ Faz 2 tamamlandı: {len(ads)} reklam işlendi")
             
         except Exception as e:
             logger.error(f"URL scraping hatası: {e}")
@@ -987,43 +1023,29 @@ class TikTokSeleniumScraper:
     def _extract_from_selenium_element(self, element) -> Dict:
         """
         GÜNCEL VERSİYON: Detay sayfasından gerçek video çeker
-        ÖNEMLİ: Ana sayfadan advertiser_name'i ÖNCELİKLE al ve KORU!
         """
         data = {}
         
         try:
-            # 1. Önce metadata al (advertiser name, dates, ad_url) - ANA SAYFADAN!
-            # Bu element ana sayfadayken çıkar, çünkü detay sayfasına gidince stale olacak
+            # 1. Önce metadata al (advertiser name, dates, ad_url)
             data.update(self._extract_ad_metadata(element))
             
-            # 2. Advertiser name'i kaydet (detay sayfası override etmesin!)
-            advertiser_name_from_main = data.get('advertiser_name', 'Unknown')
+            # 2. Ad URL'sini al
             ad_url = data.get('ad_url', '')
-            
-            logger.debug(f"🏷️ Ana sayfadan advertiser: '{advertiser_name_from_main}'")
             
             # 3. Detay sayfasından video çek
             if ad_url and '/ads/detail/' in ad_url:
                 # DETAY SAYFASINDAN gerçek video al
                 media_data = self._extract_video_from_detail_page(ad_url)
-                
-                # Sadece media bilgilerini güncelle (advertiser_name KORUYORUZ!)
-                if media_data.get('media_urls'):
-                    data['media_urls'] = media_data['media_urls']
-                    data['media_type'] = media_data['media_type']
-                    data['video_found'] = media_data.get('video_found', False)
-                    data['extraction_method'] = 'detail_page_video'
-                    logger.info(f"✅ Video çekildi: {advertiser_name_from_main} - {media_data.get('media_type')}")
-                else:
-                    logger.warning(f"⚠️ Detay sayfasında media bulunamadı: {advertiser_name_from_main}")
+                data.update(media_data)
+                logger.info(f"✅ Detay sayfası extraction: media_type={media_data.get('media_type')}, URLs={len(media_data.get('media_urls', []))}")
             else:
                 # Fallback: Ana sayfadan thumbnail al
                 logger.warning("⚠️ Ad URL bulunamadı, ana sayfadan thumbnail alınıyor...")
                 media_data = self._original_media_extraction(element)
                 data.update(media_data)
             
-            # 4. Advertiser name'i tekrar ata (emin olmak için)
-            data['advertiser_name'] = advertiser_name_from_main
+            data['extraction_method'] = 'detail_page_video'
 
             # #region agent log
             try:
