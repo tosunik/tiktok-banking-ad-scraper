@@ -649,17 +649,110 @@ class TikTokSeleniumScraper:
                         ]
                         
                         dropdown_clicked = False
+                        
+                        # DEBUG: Tıklama öncesi search field değerini kaydet
+                        try:
+                            before_click_value = search_input.get_attribute('value') or ""
+                            logger.info(f"🔍 DEBUG: Tıklama öncesi search field değeri: '{before_click_value}'")
+                        except:
+                            before_click_value = ""
+                        
+                        # DEBUG: Screenshot (tıklama öncesi)
+                        try:
+                            self.driver.save_screenshot('/app/before_autocomplete_click.png')
+                            logger.info("📸 DEBUG: Tıklama öncesi screenshot: /app/before_autocomplete_click.png")
+                        except:
+                            pass
+                        
                         for selector in dropdown_selectors:
                             try:
                                 suggestion = WebDriverWait(self.driver, 3).until(
                                     EC.element_to_be_clickable((By.XPATH, selector))
                                 )
+                                
+                                # DEBUG: Element durumu kontrolü
                                 suggestion_text = suggestion.text or suggestion.get_attribute('textContent') or ""
+                                is_displayed = suggestion.is_displayed()
+                                is_enabled = suggestion.is_enabled()
+                                location = suggestion.location
+                                size = suggestion.size
+                                
                                 logger.info(f"✅ Autocomplete suggestion bulundu: '{suggestion_text[:80]}...'")
-                                suggestion.click()
+                                logger.info(f"🔍 DEBUG: Element durumu - displayed={is_displayed}, enabled={is_enabled}, location={location}, size={size}")
+                                
+                                # DEBUG: Türkçe karakter kontrolü (İ vs I)
+                                logger.info(f"🔍 DEBUG: Türkçe karakter kontrolü:")
+                                logger.info(f"   Bizim keyword: '{search_keyword}'")
+                                logger.info(f"   Dropdown text: '{suggestion_text}'")
+                                
+                                # İ vs I kontrolü
+                                if 'İ' in suggestion_text and 'I' in search_keyword:
+                                    logger.warning("⚠️ TÜRKÇE KARAKTER SORUNU: Dropdown'da 'İ' var, bizde 'I' var!")
+                                    logger.warning("   Bu eşleşme sorununa neden olabilir.")
+                                elif 'I' in suggestion_text and 'İ' in search_keyword:
+                                    logger.warning("⚠️ TÜRKÇE KARAKTER SORUNU: Dropdown'da 'I' var, bizde 'İ' var!")
+                                
+                                # Text eşleşme kontrolü
+                                if search_keyword.lower() in suggestion_text.lower() or suggestion_text.lower() in search_keyword.lower():
+                                    logger.info("✅ Text eşleşmesi var (case-insensitive)")
+                                else:
+                                    logger.warning("⚠️ Text eşleşmesi yok! Farklı text'ler olabilir.")
+                                
+                                # Tıklama öncesi dropdown görünür mü kontrol et
+                                try:
+                                    dropdown_visible_before = self.driver.find_element(By.XPATH, "//div[contains(@class, 'exact_field_label')]")
+                                    logger.info("🔍 DEBUG: Dropdown tıklama öncesi görünür")
+                                except:
+                                    logger.warning("⚠️ DEBUG: Dropdown tıklama öncesi görünür değil!")
+                                
+                                # TIKLAMA: Önce Selenium click, başarısız olursa JavaScript click
+                                try:
+                                    suggestion.click()
+                                    logger.info("🖱️ Selenium click() ile tıklandı")
+                                except Exception as selenium_click_err:
+                                    logger.warning(f"⚠️ Selenium click başarısız, JavaScript click deneniyor: {selenium_click_err}")
+                                    try:
+                                        self.driver.execute_script("arguments[0].click();", suggestion)
+                                        logger.info("🖱️ JavaScript click() ile tıklandı")
+                                    except Exception as js_click_err:
+                                        logger.error(f"❌ JavaScript click de başarısız: {js_click_err}")
+                                        raise
+                                
+                                # DEBUG: Tıklama sonrası search field değeri kontrolü
+                                time.sleep(1)  # Kısa bekle (değer güncellensin)
+                                try:
+                                    after_click_value = search_input.get_attribute('value') or ""
+                                    logger.info(f"🔍 DEBUG: Tıklama sonrası search field değeri: '{after_click_value}'")
+                                    
+                                    if before_click_value == after_click_value:
+                                        logger.error(f"❌ TIKLAMA ÇALIŞMADI! Search field değişmedi!")
+                                        logger.error(f"   Önce: '{before_click_value}'")
+                                        logger.error(f"   Sonra: '{after_click_value}'")
+                                    else:
+                                        logger.info(f"✅ Tıklama başarılı! Search field değişti:")
+                                        logger.info(f"   Önce: '{before_click_value}'")
+                                        logger.info(f"   Sonra: '{after_click_value}'")
+                                except Exception as value_check_err:
+                                    logger.warning(f"⚠️ Search field değeri kontrol edilemedi: {value_check_err}")
+                                
+                                # DEBUG: Dropdown kapanma kontrolü
+                                time.sleep(1)
+                                try:
+                                    dropdown_still_visible = self.driver.find_element(By.XPATH, "//div[contains(@class, 'exact_field_label')]")
+                                    logger.warning("⚠️ DEBUG: Dropdown hala görünür! Tıklama başarısız olabilir.")
+                                except:
+                                    logger.info("✅ DEBUG: Dropdown kapandı, tıklama başarılı görünüyor!")
+                                
+                                # DEBUG: Screenshot (tıklama sonrası)
+                                try:
+                                    self.driver.save_screenshot('/app/after_autocomplete_click.png')
+                                    logger.info("📸 DEBUG: Tıklama sonrası screenshot: /app/after_autocomplete_click.png")
+                                except:
+                                    pass
+                                
                                 dropdown_clicked = True
                                 logger.info("🖱️ Autocomplete suggestion'a tıklandı!")
-                                time.sleep(2)  # Dropdown seçiminden sonra bekle
+                                time.sleep(1)  # Dropdown seçiminden sonra bekle
                                 break
                             except Exception as selector_err:
                                 logger.debug(f"Selector '{selector}' başarısız: {selector_err}")
@@ -742,20 +835,95 @@ class TikTokSeleniumScraper:
                         continue
                 
                 if search_button:
+                    # DEBUG: Tıklama öncesi URL ve Total ads
+                    try:
+                        before_search_url = self.driver.current_url
+                        logger.info(f"🔍 DEBUG: Search öncesi URL: {before_search_url}")
+                        
+                        # Total ads kontrolü (öncesi)
+                        try:
+                            total_ads_before = self.driver.find_element(By.XPATH, "//*[contains(text(), 'Total ads')]")
+                            total_ads_before_text = total_ads_before.text
+                            logger.info(f"🔍 DEBUG: Search öncesi Total ads: '{total_ads_before_text}'")
+                        except:
+                            logger.info("🔍 DEBUG: Search öncesi Total ads bulunamadı (normal)")
+                    except:
+                        before_search_url = ""
+                    
+                    # DEBUG: Screenshot (search öncesi)
+                    try:
+                        self.driver.save_screenshot('/app/before_search_click.png')
+                        logger.info("📸 DEBUG: Search öncesi screenshot: /app/before_search_click.png")
+                    except:
+                        pass
+                    
                     logger.info("🔍 Search butonuna tıklıyorum (autocomplete selection sonrası)...")
-                    search_button.click()
+                    
+                    # TIKLAMA: Önce Selenium click, başarısız olursa JavaScript click
+                    try:
+                        search_button.click()
+                        logger.info("🖱️ Search butonu Selenium click() ile tıklandı")
+                    except Exception as selenium_click_err:
+                        logger.warning(f"⚠️ Search butonu Selenium click başarısız, JavaScript click deneniyor: {selenium_click_err}")
+                        try:
+                            self.driver.execute_script("arguments[0].click();", search_button)
+                            logger.info("🖱️ Search butonu JavaScript click() ile tıklandı")
+                        except Exception as js_click_err:
+                            logger.error(f"❌ Search butonu JavaScript click de başarısız: {js_click_err}")
+                            raise
+                    
+                    # DEBUG: Tıklama sonrası URL değişimi kontrolü
+                    time.sleep(2)  # URL değişimi için bekle
+                    try:
+                        after_search_url = self.driver.current_url
+                        logger.info(f"🔍 DEBUG: Search sonrası URL: {after_search_url}")
+                        
+                        if before_search_url == after_search_url:
+                            logger.warning("⚠️ DEBUG: URL değişmedi! Search butonu çalışmamış olabilir.")
+                        else:
+                            logger.info("✅ DEBUG: URL değişti, Search butonu çalıştı!")
+                            logger.info(f"   Önce: {before_search_url[:100]}...")
+                            logger.info(f"   Sonra: {after_search_url[:100]}...")
+                    except:
+                        pass
+                    
                 else:
                     logger.warning("⚠️ Search butonu bulunamadı, Enter tuşu ile devam ediliyor...")
                     # Fallback: Enter tuşu
                     try:
                         search_input = self.driver.find_element(By.CSS_SELECTOR, "input[placeholder*='Advertiser'], input[placeholder*='keyword']")
                         search_input.send_keys(Keys.ENTER)
+                        logger.info("⌨️ Enter tuşu ile search yapıldı")
                     except:
                         pass
                 
                 # Sonuçların yüklenmesini UZUN BEKLE (8-9 saniye sürebilir!)
                 logger.info("⏳ Filtrelenmiş sonuçlar yükleniyor (10 saniye bekleniyor)...")
                 time.sleep(10)
+                
+                # DEBUG: Search sonrası Total ads kontrolü
+                try:
+                    total_ads_after = self.driver.find_element(By.XPATH, "//*[contains(text(), 'Total ads')]")
+                    total_ads_after_text = total_ads_after.text
+                    logger.info(f"🔍 DEBUG: Search sonrası Total ads: '{total_ads_after_text}'")
+                    
+                    # NaN kontrolü
+                    if "NaN" in total_ads_after_text or "nan" in total_ads_after_text.lower():
+                        logger.error("❌ DEBUG: Total ads = NaN! TikTok sonuç döndürmüyor!")
+                        logger.error("   Bu, autocomplete veya search butonu tıklamasının başarısız olduğunu gösterir.")
+                    elif "0" in total_ads_after_text and "Total ads: 0" in total_ads_after_text:
+                        logger.warning("⚠️ DEBUG: Total ads = 0. Gerçekten sonuç yok veya filtre çok sıkı.")
+                    else:
+                        logger.info(f"✅ DEBUG: Total ads değeri normal görünüyor: '{total_ads_after_text}'")
+                except Exception as total_ads_err:
+                    logger.warning(f"⚠️ DEBUG: Total ads bulunamadı: {total_ads_err}")
+                
+                # DEBUG: Screenshot (search sonrası)
+                try:
+                    self.driver.save_screenshot('/app/after_search_click.png')
+                    logger.info("📸 DEBUG: Search sonrası screenshot: /app/after_search_click.png")
+                except:
+                    pass
                 
                 # #region agent log
                 # DEBUG: Search'ten sonra durum
