@@ -375,14 +375,14 @@ class TikTokSeleniumScraper:
                         advertiser_name: str = "",
                         keyword: str = "",
                         region: str = "TR",
-                        days_back: int = 30) -> str:
+                        days_back: int = 7) -> str:
         """TikTok Ad Library arama URL'i oluştur
         
         Args:
             advertiser_name: Reklam veren adı (tam eşleşme arar)
             keyword: Genel keyword (reklam içeriğinde arar) - advertiser_name yerine kullanılabilir
             region: Ülke kodu
-            days_back: Kaç gün geriye gidilecek
+            days_back: Kaç gün geriye gidilecek (default: son 7 gün)
         """
         
         # Tarih aralığı hesapla (Unix timestamp milisaniye)
@@ -987,29 +987,43 @@ class TikTokSeleniumScraper:
     def _extract_from_selenium_element(self, element) -> Dict:
         """
         GÜNCEL VERSİYON: Detay sayfasından gerçek video çeker
+        ÖNEMLİ: Ana sayfadan advertiser_name'i ÖNCELİKLE al ve KORU!
         """
         data = {}
         
         try:
-            # 1. Önce metadata al (advertiser name, dates, ad_url)
+            # 1. Önce metadata al (advertiser name, dates, ad_url) - ANA SAYFADAN!
+            # Bu element ana sayfadayken çıkar, çünkü detay sayfasına gidince stale olacak
             data.update(self._extract_ad_metadata(element))
             
-            # 2. Ad URL'sini al
+            # 2. Advertiser name'i kaydet (detay sayfası override etmesin!)
+            advertiser_name_from_main = data.get('advertiser_name', 'Unknown')
             ad_url = data.get('ad_url', '')
+            
+            logger.debug(f"🏷️ Ana sayfadan advertiser: '{advertiser_name_from_main}'")
             
             # 3. Detay sayfasından video çek
             if ad_url and '/ads/detail/' in ad_url:
                 # DETAY SAYFASINDAN gerçek video al
                 media_data = self._extract_video_from_detail_page(ad_url)
-                data.update(media_data)
-                logger.info(f"✅ Detay sayfası extraction: media_type={media_data.get('media_type')}, URLs={len(media_data.get('media_urls', []))}")
+                
+                # Sadece media bilgilerini güncelle (advertiser_name KORUYORUZ!)
+                if media_data.get('media_urls'):
+                    data['media_urls'] = media_data['media_urls']
+                    data['media_type'] = media_data['media_type']
+                    data['video_found'] = media_data.get('video_found', False)
+                    data['extraction_method'] = 'detail_page_video'
+                    logger.info(f"✅ Video çekildi: {advertiser_name_from_main} - {media_data.get('media_type')}")
+                else:
+                    logger.warning(f"⚠️ Detay sayfasında media bulunamadı: {advertiser_name_from_main}")
             else:
                 # Fallback: Ana sayfadan thumbnail al
                 logger.warning("⚠️ Ad URL bulunamadı, ana sayfadan thumbnail alınıyor...")
                 media_data = self._original_media_extraction(element)
                 data.update(media_data)
             
-            data['extraction_method'] = 'detail_page_video'
+            # 4. Advertiser name'i tekrar ata (emin olmak için)
+            data['advertiser_name'] = advertiser_name_from_main
 
             # #region agent log
             try:
