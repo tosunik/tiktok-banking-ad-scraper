@@ -191,9 +191,11 @@ async def scrape_tiktok_ads(request: ScrapeRequest):
                     "IS BANKASI": "TURKIYE IS BANKASI",
                     "ISBANK": "TURKIYE IS BANKASI",
                     "TURKIYE IS BANKASI": "TURKIYE IS BANKASI",
+                    # QNB - TAM İSİM (whitelist'te "QNB BANK ANONIM SIRKETI" olarak aranır)
+                    "QNB BANK ANONIM SIRKETI": "QNB BANK ANONIM SIRKETI",
+                    "QNB FINANSBANK": "QNB BANK ANONIM SIRKETI",
+                    "QNB": "QNB BANK ANONIM SIRKETI",
                     # Diğer bankalar
-                    "QNB": "QNB FINANSBANK",
-                    "QNB FINANSBANK": "QNB FINANSBANK",
                     "ING": "ING BANK",
                     "ING BANK": "ING BANK",
                     "DENIZBANK": "DENIZBANK",
